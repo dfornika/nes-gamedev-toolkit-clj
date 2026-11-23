@@ -1,0 +1,2 @@
+{:paths ["src/cljc" "src/clj"]
+ :deps {io.github.dfornika/zeropage {:local/root "../zeropage"}}}

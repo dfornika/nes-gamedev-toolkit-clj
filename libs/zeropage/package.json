@@ -1,0 +1,15 @@
+{
+  "name": "zeropage",
+  "version": "1.0.0",
+  "description": "",
+  "scripts": {
+    "test:jvm": "clojure -M:test:test-jvm",
+    "test:node": "clojure -M:test:test-node -m shadow.cljs.devtools.cli compile test && node target/test/test.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "shadow-cljs": "^3.5.4",
+    "source-map-support": "^0.5.21"
+  }
+}
