@@ -1,4 +1,4 @@
-{:paths ["src/cljc"]
+{:paths ["src/cljc" "resources"]
  :deps {io.github.dfornika/zeropage {:local/root "../../libs/zeropage"}
         io.github.dfornika/cartridj {:local/root "../../libs/cartridj"}}
  :aliases

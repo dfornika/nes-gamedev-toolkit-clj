@@ -28,9 +28,11 @@
   (:require [zeropage.sub :as sub :refer [call]]
             [zeropage.gen :as gen]
             [cartridj.chr :as chr]
+            [cartridj.palette :as palette]
             [cartridj.hardware :as hw]
             [cartridj.memory :as memory]
-            [cartridj.rom :as rom]))
+            [cartridj.rom :as rom]
+            [poco.util :as util]))
 
 ;; ---------------------------------------------------------------------------
 ;; Memory: the program's variables. The allocator picks their addresses
@@ -55,40 +57,55 @@
 ;; ---------------------------------------------------------------------------
 ;; Graphics and colors
 
-(def face
-  ["....11111111...."
-   "..112222222211.."
-   ".12222222222221."
-   ".12222222222221."
-   "1222112222112221"
-   "1222132222132221"
-   "1222112222112221"
-   "1222222222222221"
-   "1222222222222221"
-   "1221222222221221"
-   "1222122222212221"
-   ".12221111112221."
-   ".12222222222221."
-   "..112222222211.."
-   "....11111111...."
-   "................"])
+
+(def player-sprites-data
+  (util/inline-edn-resource "assets/sprites/player.edn"))
+
+(def player-head (concat (:head-upper-front player-sprites-data)
+                               (:head-lower-front player-sprites-data)))
+  
+
+(def player-body (concat (:body-upper-front player-sprites-data)
+                               (:body-lower-front player-sprites-data)))
 
 (def tiles
   "Tile 0 is blank (the background is filled with it); 1-4 are the face."
-  (into [chr/blank] (chr/tiles face)))
+  (into [chr/blank] (chr/tiles (concat player-head player-body))))
 
-(def face-sprites
-  "The face is 16x16, and a sprite is 8x8, so it takes four sprites that
+(def player-sprites
+  "The player is 16x32, and a sprite is 8x8, so it takes eight sprites that
   move together (a 'metasprite'): [tile x-offset y-offset]"
-  [[1 0 0] [2 8 0]
-   [3 0 8] [4 8 8]])
+  [[ 1  0  0] [ 2  8  0]
+   [ 3  0  8] [ 4  8  8]
+   [ 5  0 16] [ 6  8 16]
+   [ 7  0 24] [ 8  8 24]])
 
 ;; Colors are numbers from the NES's fixed set of 64
 ;; (https://www.nesdev.org/wiki/PPU_palettes; the Palettes tab shows them).
 (def backgrounds
   "The background colors that A steps through. Eight, so that
   `color AND 7` is always a valid index."
-  [0x21 0x2A 0x16 0x14 0x27 0x11 0x00 0x0F])
+  (map palette/color [:light-azure :light-green :red :magenta :light-orange :azure :dark-gray :black]))
+
+(def bg (first backgrounds))
+
+(defn to-hex
+  [n]
+  (format "%X" n))
+
+(def jeff-palettes
+  [:black :brown      :skintone :light-blue,  
+   :black :light-blue :skintone :pink,  
+   :black :light-blue :skintone :dark-cyan,  
+   :black :light-blue :skintone :dark-cyan])
+
+(def dan-palettes
+  [:black :dark-brown :skintone :black,  
+   :black :dark-red   :skintone :pink,  
+   :black :dark-red   :skintone :dark-cyan,  
+   :black :dark-red   :skintone :dark-cyan])
+
+(def player-palettes dan-palettes)
 
 (def palettes
   "Four background palettes, then four sprite palettes, of four colors
@@ -96,9 +113,8 @@
   other palette is unused (it means 'transparent'). The first sprite
   palette's first entry is the same memory as the background color, so it
   gets the same value."
-  (let [bg (first backgrounds)]
-    [bg 0x0F 0x10 0x30,  0 0 0 0,  0 0 0 0,  0 0 0 0
-     bg 0x0F 0x28 0x30,  0 0 0 0,  0 0 0 0,  0 0 0 0]))  ; the face: black, yellow, white
+  (let [bg-palettes [(first backgrounds) 0x0F 0x10 0x30,  0 0 0 0,  0 0 0 0,  0 0 0 0]]
+    (concat bg-palettes (map palette/color player-palettes))))
 
 ;; ---------------------------------------------------------------------------
 ;; Code generators: functions that return instructions
@@ -221,22 +237,35 @@
     (when-button :buttons :left  (gen/sub16 :player/x speed))
     (when-button :buttons :down  (gen/add16 :player/y speed))
     (when-button :buttons :up    (gen/sub16 :player/y speed))
-    (when-button :pressed :a     [:inc :color])]))
+    (when-button :pressed :a     [:inc :color])
+    (when-button :pressed :b     [:inc :color])]))
 
 (def draw-player
   (sub/sub
    :draw-player
-   "Write the face's four sprites to the shadow sprite memory. A sprite is
-  4 bytes: Y, tile number, attributes (palette, flipping), X.
+   "Write the player's eight sprites to the shadow sprite memory. A sprite is
+    4 bytes: Y, tile number, attributes (palette, flipping), X.
 
   The `for` runs when the ROM is built, not on the NES: it writes out the
-  same few instructions four times with different numbers."
-   (for [[i [tile dx dy]] (map-indexed vector face-sprites)
-         :let [sprite [:+ :oam (* 4 i)]]]
-     [[:lda (gen/whole :player/y)] [:clc] [:adc [:imm dy]] [:sta sprite]
-      [:lda [:imm tile]]                       [:sta [:+ sprite 1]]
-      [:lda [:imm 0]]                          [:sta [:+ sprite 2]]   ; sprite palette 0
-      [:lda (gen/whole :player/x)] [:clc] [:adc [:imm dx]] [:sta [:+ sprite 3]]])))
+  same few instructions eight times with different numbers."
+   (for [[i [tile dx dy]] (map-indexed vector player-sprites)
+         :let [sprite [:+ :oam (* 8 i)]
+               palette-map {0 0,   ; head-upper-left
+                            1 0,   ; head-upper-right
+                            2 1,   ; head-lower-left
+                            3 1,   ; head-lower-right
+                            4 2,   ; body-upper-left
+                            5 2,   ; body-upper-right
+                            6 3,   ; body-lower-left
+                            7 3}]] ;body-lower-right
+     [[:lda (gen/whole :player/y)] 
+      [:clc] 
+      [:adc [:imm dy]]    [:sta sprite]
+      [:lda [:imm tile]]  [:sta [:+ sprite 1]]
+      [:lda [:imm (palette-map i)]]     [:sta [:+ sprite 2]]   ; sprite palette 0
+      [:lda (gen/whole :player/x)] 
+      [:clc] 
+      [:adc [:imm dx]]    [:sta [:+ sprite 3]]])))
 
 (def main
   [[:label :main]
