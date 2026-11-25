@@ -9,7 +9,7 @@
   the subroutine changes X. `clobbers` answers that.
 
   `size` says how many bytes of ROM code takes. For how long code takes to
-  run, run it: nes.cpu.harness/run-routine counts the cycles."
+  run, run it: zeropage.harness/run-routine counts the cycles."
   (:require [zeropage.asm :as asm]))
 
 (def ^:private writes

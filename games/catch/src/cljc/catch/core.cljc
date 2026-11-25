@@ -131,7 +131,7 @@
 
 (def palettes
   (palette/palettes
-   {:backdrop   :dark-indigo
+   {:backdrop   :dark-blue
     :background [[:white :light-gray :gray]            ; text, and the twinkles
                  [:black :dark-rose :rose]]            ; the wall
     :sprites    [[:black :light-yellow :white]         ; the face

@@ -9,7 +9,7 @@
             [zeropage.asm :as asm]
             [zeropage.gen :as gen]
             [zeropage.sub :as sub :refer [call]]
-            [nes.cpu.harness :as harness]))
+            [zeropage.harness :as harness]))
 
 (def ^:private syms {:n 0x10 :m 0x12 :out 0x14 :buf 0x300 :src 0x400})
 

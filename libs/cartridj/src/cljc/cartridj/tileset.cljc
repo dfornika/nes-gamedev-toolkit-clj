@@ -1,4 +1,4 @@
-(ns gamedev-toolkit.tileset
+(ns cartridj.tileset
   "A cartridge's tiles, with names instead of numbers.
 
   The PPU knows tiles by number: their position in the cartridge's
@@ -16,8 +16,8 @@
     (sprites tiles :face)       ; => the pieces to draw it as sprites
 
   A drawing can be any size that's a multiple of 8 each way; it's cut
-  into tiles in reading order (see gamedev-toolkit.chr/tiles)."
-  (:require [gamedev-toolkit.chr :as chr]))
+  into tiles in reading order (see cartridj.chr/tiles)."
+  (:require [cartridj.chr :as chr]))
 
 (defn tileset
   "Number the tiles of `entries`, [[name drawing-or-tiles] ...], from 0.
@@ -55,7 +55,7 @@
 
 (defn block
   "The four tiles of a 16x16 drawing, as [top-left top-right bottom-left
-  bottom-right]: what a metatile wants (see gamedev-toolkit.screen)."
+  bottom-right]: what a metatile wants (see cartridj.screen)."
   [tileset name]
   (let [{:keys [width height]} (entry tileset name)]
     (when-not (= [2 2] [width height])
@@ -63,7 +63,7 @@
     [(tile tileset name 0 0) (tile tileset name 1 0) (tile tileset name 0 1) (tile tileset name 1 1)]))
 
 (defn sprites
-  "The pieces to draw `name` as sprites, for gamedev-toolkit.runtime's
+  "The pieces to draw `name` as sprites, for cartridj.runtime's
   metasprite: [[tile dx dy attributes] ...]. `attributes` is the sprite
   palette (0 to 3), plus 0x40 to flip left-right and 0x80 upside down."
   ([tileset name] (sprites tileset name 0))

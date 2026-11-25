@@ -87,14 +87,14 @@
 ;; ---------------------------------------------------------------------------
 ;; A whole program, without a console
 ;;
-;; A game built with gamedev-toolkit can run here too, as long as something
+;; A game built with cartridj can run here too, as long as something
 ;; stands in for the hardware it talks to. This does the least that works:
 ;; the PPU always says it's in vertical blank, writes to hardware registers
 ;; just land in memory (so a test can look at the last one), there's a
 ;; controller, and the test says when a frame ends.
 ;;
 ;; It relies on two labels that both games.hello and programs made by
-;; gamedev-toolkit.runtime have: :main (the top of the main loop) and
+;; cartridj.runtime have: :main (the top of the main loop) and
 ;; :wait-for-frame (where the main loop waits for the NMI).
 
 (def ^:private button-bits

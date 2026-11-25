@@ -1,4 +1,4 @@
-(ns gamedev-toolkit.sound
+(ns cartridj.sound
   "Sound effects.
 
   The NES's sound chip (the APU) has five channels. Two make square
@@ -18,7 +18,7 @@
 
   A new effect on a channel cuts off whatever that channel was playing.
 
-  Music is a table of notes, played by gamedev-toolkit.runtime a note at a
+  Music is a table of notes, played by cartridj.runtime a note at a
   time (see `song`). It uses the triangle channel, which effects here
   don't, so the two never cut each other off.
 
@@ -26,7 +26,7 @@
   :snd-chn first.
 
   See https://www.nesdev.org/wiki/APU"
-  (:require [gamedev-toolkit.hardware :as hw]))
+  (:require [cartridj.hardware :as hw]))
 
 (def ^:private cpu-hz 1789773)
 

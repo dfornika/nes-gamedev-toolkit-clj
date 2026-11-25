@@ -24,8 +24,8 @@
     (remove-it things)                    ; inside `each`: this one's gone
 
   Needs cartridj.runtime (for :rt/slot and :rt/temp)."
-  (:require [cartridj.asm :as asm]
-            [cartridj.gen :as gen]))
+  (:require [zeropage.asm :as asm]
+            [zeropage.gen :as gen]))
 
 (defn pool
   "A pool called `name` (a keyword) with room for `size` objects, of the

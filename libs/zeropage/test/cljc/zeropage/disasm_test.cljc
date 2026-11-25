@@ -1,7 +1,7 @@
 (ns zeropage.disasm-test
   (:require [#?(:clj clojure.test :cljs cljs.test) :refer [deftest is testing]]
-            [nes.cpu.disasm :as disasm]
-            [nes.cpu.opcodes :as ops]))
+            [zeropage.disasm :as disasm]
+            [zeropage.opcodes :as ops]))
 
 (deftest opcode-table
   (is (= 151 (count ops/opcodes)) "the 6502 has 151 official opcodes")

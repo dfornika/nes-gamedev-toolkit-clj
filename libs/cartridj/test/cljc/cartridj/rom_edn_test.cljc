@@ -1,8 +1,8 @@
 (ns cartridj.rom-edn-test
   (:require [#?(:clj clojure.test :cljs cljs.test) :refer [deftest is testing]]
             [clojure.string :as str]
-            [games.catch :as catch]
-            [games.hello :as hello]
+            [catch.core :as catch]
+            [hello.core :as hello]
             [cartridj.chr :as chr]
             [cartridj.rom-edn :as rom-edn]))
 

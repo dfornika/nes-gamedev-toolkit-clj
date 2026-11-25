@@ -2,8 +2,6 @@
  :builds {:test {:target :node-test
                  :output-to "target/test/test.js"
                  :ns-regexp "-test$"
-                 ;; bundle npm packages, as the browser build does: Node loads
-                 ;; jsnes's bundle as an ES module (its package says "type":
-                 ;; "module") and gets nothing from it
+                 ;; bundle npm packages (nes-cljs's CPU, which runs the tests, pulls some in)
                  :js-options {:js-provider :shadow}
                  :autorun true}}}

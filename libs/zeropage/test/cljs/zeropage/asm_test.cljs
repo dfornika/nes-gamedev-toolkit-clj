@@ -1,6 +1,6 @@
 (ns zeropage.asm-test
   (:require [cljs.test :refer [deftest is testing]]
-            [nes.cpu.harness :as harness]))
+            [zeropage.harness :as harness]))
 
 (deftest running-assembled-code
   (testing "adding, with a symbol for the variable"
