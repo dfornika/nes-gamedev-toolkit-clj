@@ -1,0 +1,103 @@
+# Run the tests on every push and pull request.
+#
+# 1. zeropage: its portable (.cljc) tests on the JVM, then all of its tests
+#    in Node (npm run test:node). The Node tests run generated 6502 code on
+#    the CPU from nes-cljs, which is a sibling checkout (see below).
+# 2. cartridj: its portable (.cljc) tests on the JVM. These also build the
+#    catch and hello games, to check ROM output.
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run for the older one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  zeropage:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libs/zeropage
+    steps:
+      - uses: actions/checkout@v7
+
+      # zeropage's :test alias depends on ../../../nes-cljs (its 6502 CPU, the
+      # oracle the tests run generated code on): next to this checkout.
+      - name: Check out nes-cljs
+        working-directory: ${{ github.workspace }}
+        run: git clone --depth 1 https://github.com/dfornika/nes-cljs.git ../nes-cljs
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: libs/zeropage/package-lock.json
+
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn') }}
+          restore-keys: clj-${{ runner.os }}-
+
+      - run: npm ci
+
+      # The code that isn't tied to the browser, on the JVM
+      - name: Unit tests (JVM)
+        run: npm run test:jvm
+
+      - name: Unit tests (Node)
+        run: npm run test:node
+
+  cartridj:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: libs/cartridj
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn') }}
+          restore-keys: clj-${{ runner.os }}-
+
+      - name: Unit tests (JVM)
+        run: clojure -M:test:test-jvm
