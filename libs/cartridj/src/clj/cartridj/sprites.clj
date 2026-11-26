@@ -1,0 +1,219 @@
+(ns cartridj.sprites
+  "Turning pictures of sprites (PNG files) into data a game builds from.
+  JVM only: it runs when you prepare a game's art, and writes Clojure data
+  (EDN) that the game reads when it's built, so building needs no PNG
+  reader and works anywhere, including in the browser.
+
+  Each picture is one *frame*: a sprite (or a group of them that move
+  together, a metasprite) whose width and height are multiples of 8. For
+  each frame this works out what the NES needs:
+
+  - every pixel's NES color. Pixels must be exactly the colors of a NES
+    palette table (`:table`: Aseprite's by default, which is what its
+    NES palette exports), unless you ask for `:nearest? true`. See-through
+    pixels are see-through; black is just a color.
+  - the picture cut into 8x8 tiles. A sprite tile has three colors besides
+    see-through, because it's drawn with one of a game's four sprite
+    palettes, each three colors. A tile that uses more is an error that
+    names the tile and its colors, to fix in the picture: nothing is
+    repainted behind your back.
+  - the sprite palettes: up to four of three colors, found for all the
+    frames together (they share the hardware's palette memory), or the ones
+    you give with `:palettes`.
+  - the tiles' drawings (strings of . 1 2 3, as cartridj.chr reads them),
+    with identical ones shared, and for each frame the sprites to draw:
+    [tile dx dy palette]. Tiles with nothing in them are left out.
+
+  The result:
+
+    {:palettes [[color color color] ...]   ; NES color numbers
+     :tiles    [[\"..1122..\" ...] ...]      ; eight strings each
+     :frames   [{:name :players-01
+                 :sprites [[tile dx dy palette] ...]} ...]}
+
+  `import!` does it all, and writes the EDN."
+  (:require [clojure.java.io :as io]
+            [clojure.string :as str]
+            [cartridj.palette :as palette]
+            [cartridj.png :as png]))
+
+(def ^:private tables
+  {:aseprite palette/rgb-palette-aseprite
+   :jsnes palette/rgb-palette-jsnes})
+
+(def transparent
+  "What stands for a see-through pixel while the colors are being worked
+  out. (Not a NES color, so it can't be mistaken for one.)"
+  -1)
+
+(defn- hex [n] (format "$%02X" n))
+
+(defn- hexes [colors] (str/join " " (map hex (sort colors))))
+
+(defn- nes-color
+  "The NES color number for [r g b] in `table`: the exact match, or with
+  `nearest?` the closest. Otherwise nil."
+  [table nearest? rgb]
+  (let [n (palette/nearest rgb table)]
+    (when (or nearest? (= rgb (table n)))
+      n)))
+
+(defn read-frame
+  "The picture in `file` as {:name :colors :problems}: :colors are rows of
+  NES color numbers (`transparent` where it's see-through), and :problems
+  is a vector of messages about what can't be used. Options: :table
+  (:aseprite or :jsnes, default :aseprite), :nearest? (default false)."
+  ([file] (read-frame file {}))
+  ([file {:keys [table nearest?] :or {table :aseprite}}]
+   (let [t (or (tables table) (throw (ex-info (str "Unknown table " table ": :aseprite or :jsnes") {})))
+         {:keys [width height pixels]} (png/read-image file)
+         name (str/replace (.getName (io/file file)) #"\.png$" "")
+         size-problems (when-not (and (pos? width) (pos? height) (zero? (mod width 8)) (zero? (mod height 8)))
+                         [(str name ": " width "x" height " pixels; the width and height have to be multiples of 8")])
+         bad (atom {})
+         colors (vec (for [[y row] (map-indexed vector pixels)]
+                       (vec (for [[x [r g b a]] (map-indexed vector row)]
+                              (cond
+                                (zero? a) transparent
+                                :else (or (nes-color t nearest? [r g b])
+                                          (do (swap! bad update [r g b] (fnil conj []) [x y])
+                                              transparent)))))))]
+     {:name (keyword name)
+      :colors colors
+      :problems (vec (concat size-problems
+                             (for [[[r g b] at] @bad]
+                               (str name ": rgb(" r " " g " " b ") at " (str/join ", " (map (fn [[x y]] (str "x" x " y" y)) (take 3 at)))
+                                    (when (> (count at) 3) (str " and " (- (count at) 3) " more"))
+                                    " isn't a color in the " (clojure.core/name table)
+                                    " NES palette (pass :nearest? true to use the closest)"))))})))
+
+(defn tile-grid
+  "A frame's colors cut into 8x8 tiles, in reading order: a vector of
+  {:row :col :colors} (colors as rows)."
+  [colors]
+  (vec (for [ty (range (quot (count colors) 8))
+             tx (range (quot (count (first colors)) 8))]
+         {:row ty :col tx
+          :colors (mapv #(subvec (nth colors (+ (* ty 8) %)) (* tx 8) (* (inc tx) 8)) (range 8))})))
+
+(defn- tile-colors
+  "The colors a tile uses, without the see-through."
+  [{:keys [colors]}]
+  (disj (set (apply concat colors)) transparent))
+
+(defn- tile-problems
+  "A message for each tile of `frame` that uses more than three colors."
+  [{:keys [name colors]}]
+  (for [t (tile-grid colors)
+        :let [used (tile-colors t)]
+        :when (> (count used) 3)]
+    (str (clojure.core/name name) ": the tile at row " (:row t) ", column " (:col t)
+         " (pixels x" (* 8 (:col t)) "-" (+ 7 (* 8 (:col t)))
+         " y" (* 8 (:row t)) "-" (+ 7 (* 8 (:row t)))
+         ") uses " (count used) " colors, " (hexes used)
+         ". A sprite tile has three, besides see-through.")))
+
+(defn- sprite-palettes
+  "Up to `max-palettes` palettes of three colors that between them hold
+  every tile's colors, or an error message."
+  [frames max-palettes]
+  (let [found (png/palettes-for (map :colors frames) transparent)]
+    (if (> (count found) max-palettes)
+      (throw (ex-info (str "These pictures need " (count found) " sprite palettes, and there are "
+                           max-palettes ": " (str/join "  " (map #(str "[" (hexes %) "]") found))
+                           ". Fewer colors, or colors used together more consistently, would fit.")
+                      {:palettes found}))
+      found)))
+
+(defn- palette-for
+  "The index of the first of `palettes` that has all of `used`, or nil."
+  [palettes used]
+  (first (keep-indexed (fn [i p] (when (every? (set p) used) i)) palettes)))
+
+(defn- drawing
+  "A tile's colors as a drawing: . for see-through, 1 2 3 for the
+  palette's colors in order."
+  [colors palette]
+  (let [digit (into {transparent \.} (map vector palette "123"))]
+    (mapv #(apply str (map digit %)) colors)))
+
+(defn build
+  "Work out the palettes, tiles and frames from `frames` (as from
+  `read-frame`), or throw an ex-info that says everything that's wrong
+  (its :problems has the messages). Options: :palettes (use these instead
+  of finding some: vectors of up to three NES colors), :max-palettes
+  (default 4), :first-tile (the number of the first tile in CHR, default
+  0)."
+  [frames {:keys [palettes max-palettes first-tile] :or {max-palettes 4 first-tile 0}}]
+  (let [problems (vec (concat (mapcat :problems frames) (mapcat tile-problems frames)))
+        _ (when (seq problems)
+            (throw (ex-info (str (count problems) " problem" (when (> (count problems) 1) "s") " with the pictures:\n  "
+                                 (str/join "\n  " problems))
+                            {:problems problems})))
+        palettes (if palettes
+                   (mapv vec palettes)
+                   (sprite-palettes frames max-palettes))
+        ;; every tile needs a palette that has all its colors
+        unplaced (for [{:keys [name colors]} frames
+                       t (tile-grid colors)
+                       :let [used (tile-colors t)]
+                       :when (and (seq used) (not (palette-for palettes used)))]
+                   (str (clojure.core/name name) ": the tile at row " (:row t) ", column " (:col t)
+                        " uses " (hexes used) ", which no palette has together"))
+        _ (when (seq unplaced)
+            (throw (ex-info (str "The palettes " (pr-str palettes) " don't cover the pictures:\n  "
+                                 (str/join "\n  " unplaced))
+                            {:problems (vec unplaced)})))
+        ;; give each distinct drawing a number, in the order they turn up
+        [numbers out]
+        (reduce
+         (fn [[numbers out] {:keys [name colors]}]
+           (let [placed (for [t (tile-grid colors)
+                              :let [used (tile-colors t)]
+                              :when (seq used)
+                              :let [p (palette-for palettes used)]]
+                          [t p (drawing (:colors t) (palettes p))])
+                 numbers (reduce (fn [numbers [_ _ d]] (if (contains? numbers d) numbers (assoc numbers d (count numbers))))
+                                 numbers placed)]
+             [numbers
+              (conj out {:name name
+                         :sprites (vec (for [[t p d] placed]
+                                         [(+ first-tile (numbers d)) (* 8 (:col t)) (* 8 (:row t)) p]))})]))
+         [{} []]
+         frames)]
+    {:palettes palettes
+     :tiles (mapv key (sort-by val numbers))
+     :frames out}))
+
+(defn- pictures
+  "The PNG files in `dir`, sorted by name; or just the ones named in
+  `only` (names, with or without .png)."
+  [dir only]
+  (let [files (->> (.listFiles (io/file dir))
+                   (filter #(str/ends-with? (.getName %) ".png"))
+                   (sort-by #(.getName %)))
+        wanted (when only (set (map #(str/replace (name %) #"\.png$" "") only)))]
+    (if wanted
+      (let [found (filter #(wanted (str/replace (.getName %) #"\.png$" "")) files)]
+        (when (not= (count found) (count wanted))
+          (throw (ex-info (str "Not all of " (pr-str only) " are in " dir) {})))
+        found)
+      files)))
+
+(defn write-edn
+  "`art` (as from `build`) as readable EDN text: a drawing per line."
+  [{:keys [palettes tiles frames]}]
+  (str "{:palettes " (pr-str palettes) "\n"
+       " :tiles\n [" (str/join "\n  " (map pr-str tiles)) "]\n"
+       " :frames\n [" (str/join "\n  " (map pr-str frames)) "]}\n"))
+
+(defn import!
+  "Read the pictures in `dir`, and write the art for a game to `out`.
+  Options: :only (just these pictures, by name), and the options of
+  `read-frame` and `build`. Returns what it wrote. Throws, with everything
+  that's wrong with the pictures, if they can't be used."
+  [dir out & {:keys [only] :as opts}]
+  (let [frames (mapv #(read-frame % opts) (pictures dir only))
+        art (build frames opts)]
+    (spit out (write-edn art))
+    art))

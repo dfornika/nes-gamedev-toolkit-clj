@@ -3,6 +3,7 @@
             [clojure.java.io :as io]
             [clojure.pprint :as pprint]
             [poco.core :as game]
+            [poco.import :as import]
             [cartridj.rom-edn :refer [container]]
             [cartridj.rom :refer [ines]]))
 
@@ -37,3 +38,9 @@
     (.mkdirs (io/file roms-dir))
     (with-open [out (io/output-stream rom-path)]
       (.write out ines-bytes))))
+
+(defn import
+  "Turn the pictures in resources/assets/sprites into players.edn (see
+  poco.import). `:only [\"players-03\"]` imports just those."
+  [{:keys [only]}]
+  (import/import-sprites only))

@@ -2,7 +2,7 @@
  :deps {io.github.dfornika/zeropage {:local/root "../zeropage"}}
  :aliases {:test {:extra-deps {org.clojure/test.check {:mvn/version "1.1.1"}}
                   ;; rom-edn is checked against two real games: their sources, test-only
-                  :extra-paths ["test/cljc" "../../games/catch/src/cljc" "../../games/hello/src/cljc"]}
+                  :extra-paths ["test/cljc" "test/clj" "../../games/catch/src/cljc" "../../games/hello/src/cljc"]}
            ;; The .cljc tests on the JVM
            :test-jvm {:extra-deps {io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
-                      :main-opts ["-m" "cognitect.test-runner" "-d" "test/cljc"]}}}
+                      :main-opts ["-m" "cognitect.test-runner" "-d" "test/cljc" "-d" "test/clj"]}}}

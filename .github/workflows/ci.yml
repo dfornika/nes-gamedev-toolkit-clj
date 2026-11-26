@@ -167,7 +167,7 @@ jobs:
       # Every game builds a ROM and its names file
       - name: Build the ROMs
         run: |
-          for game in catch hello hopper tower star-run ladder alienscape; do
+          for game in catch hello hopper tower star-run ladder alienscape poco; do
             (cd "$game" && clojure -T:build rom)
           done
 

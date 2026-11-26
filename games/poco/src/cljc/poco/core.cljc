@@ -58,27 +58,22 @@
 ;; Graphics and colors
 
 
-(def player-sprites-data
-  (util/inline-edn-resource "assets/sprites/player.edn"))
-
-(def player-head (concat (:head-upper-front player-sprites-data)
-                               (:head-lower-front player-sprites-data)))
-  
-
-(def player-body (concat (:body-upper-front player-sprites-data)
-                               (:body-lower-front player-sprites-data)))
+(def art
+  "The player's pictures, as data: the sprite palettes, the tiles, and each
+  frame's sprites. GENERATED from the PNGs in resources/assets/sprites by
+  poco.import (clojure -T:build import); change the pictures, not this."
+  (util/inline-edn-resource "assets/sprites/players.edn"))
 
 (def tiles
-  "Tile 0 is blank (the background is filled with it); 1-4 are the face."
-  (into [chr/blank] (chr/tiles (concat player-head player-body))))
+  "Tile 0 is blank (the background is filled with it); the player's tiles
+  follow."
+  (into [chr/blank] (map chr/tile (:tiles art))))
 
 (def player-sprites
   "The player is 16x32, and a sprite is 8x8, so it takes eight sprites that
-  move together (a 'metasprite'): [tile x-offset y-offset]"
-  [[ 1  0  0] [ 2  8  0]
-   [ 3  0  8] [ 4  8  8]
-   [ 5  0 16] [ 6  8 16]
-   [ 7  0 24] [ 8  8 24]])
+  move together (a 'metasprite'): [tile x-offset y-offset palette]. This is
+  the first frame; the importer has the others."
+  (:sprites (first (:frames art))))
 
 ;; Colors are numbers from the NES's fixed set of 64
 ;; (https://www.nesdev.org/wiki/PPU_palettes; the Palettes tab shows them).
@@ -93,28 +88,16 @@
   [n]
   (format "%X" n))
 
-(def jeff-palettes
-  [:black :brown      :skintone :light-blue,  
-   :black :light-blue :skintone :pink,  
-   :black :light-blue :skintone :dark-cyan,  
-   :black :light-blue :skintone :dark-cyan])
-
-(def dan-palettes
-  [:black :dark-brown :skintone :black,  
-   :black :dark-red   :skintone :pink,  
-   :black :dark-red   :skintone :dark-cyan,  
-   :black :dark-red   :skintone :dark-cyan])
-
-(def player-palettes dan-palettes)
-
 (def palettes
   "Four background palettes, then four sprite palettes, of four colors
   each. The first color of all is the background color; the first of each
   other palette is unused (it means 'transparent'). The first sprite
   palette's first entry is the same memory as the background color, so it
   gets the same value."
-  (let [bg-palettes [(first backgrounds) 0x0F 0x10 0x30,  0 0 0 0,  0 0 0 0,  0 0 0 0]]
-    (concat bg-palettes (map palette/color player-palettes))))
+  (let [bg-palettes [(first backgrounds) 0x0F 0x10 0x30,  0 0 0 0,  0 0 0 0,  0 0 0 0]
+        ;; the art's palettes have three colors; the first of each is unused
+        sprite-palettes (take 4 (concat (:palettes art) (repeat [0 0 0])))]
+    (concat bg-palettes (mapcat #(cons 0x0F %) sprite-palettes))))
 
 ;; ---------------------------------------------------------------------------
 ;; Code generators: functions that return instructions
@@ -243,28 +226,20 @@
 (def draw-player
   (sub/sub
    :draw-player
-   "Write the player's eight sprites to the shadow sprite memory. A sprite is
+   "Write the player's sprites to the shadow sprite memory. A sprite is
     4 bytes: Y, tile number, attributes (palette, flipping), X.
 
   The `for` runs when the ROM is built, not on the NES: it writes out the
-  same few instructions eight times with different numbers."
-   (for [[i [tile dx dy]] (map-indexed vector player-sprites)
-         :let [sprite [:+ :oam (* 8 i)]
-               palette-map {0 0,   ; head-upper-left
-                            1 0,   ; head-upper-right
-                            2 1,   ; head-lower-left
-                            3 1,   ; head-lower-right
-                            4 2,   ; body-upper-left
-                            5 2,   ; body-upper-right
-                            6 3,   ; body-lower-left
-                            7 3}]] ;body-lower-right
-     [[:lda (gen/whole :player/y)] 
-      [:clc] 
+  same few instructions once per sprite with different numbers."
+   (for [[i [tile dx dy palette]] (map-indexed vector player-sprites)
+         :let [sprite [:+ :oam (* 8 i)]]]
+     [[:lda (gen/whole :player/y)]
+      [:clc]
       [:adc [:imm dy]]    [:sta sprite]
       [:lda [:imm tile]]  [:sta [:+ sprite 1]]
-      [:lda [:imm (palette-map i)]]     [:sta [:+ sprite 2]]   ; sprite palette 0
-      [:lda (gen/whole :player/x)] 
-      [:clc] 
+      [:lda [:imm palette]]     [:sta [:+ sprite 2]]   ; which sprite palette
+      [:lda (gen/whole :player/x)]
+      [:clc]
       [:adc [:imm dx]]    [:sta [:+ sprite 3]]])))
 
 (def main
