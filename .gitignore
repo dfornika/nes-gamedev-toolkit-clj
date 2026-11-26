@@ -14,3 +14,8 @@ target/
 .lein-failures
 .nrepl-port
 .cpcache/
+
+# editor and tool state
+.clj-kondo/
+.lsp/
+.portal/
