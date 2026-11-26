@@ -16,6 +16,7 @@
         io.github.dfornika/ladder {:local/root "ladder"}
         io.github.dfornika/alienscape {:local/root "alienscape"}
         io.github.dfornika/platform-kit {:local/root "platform-kit"}
+        io.github.dfornika/poco {:local/root "poco"}
         io.github.dfornika/nes-cljs {:local/root "../../nes-cljs"}
         org.clojure/test.check {:mvn/version "1.1.1"}
         thheller/shadow-cljs {:mvn/version "3.5.4"}}

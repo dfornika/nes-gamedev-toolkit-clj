@@ -28,5 +28,6 @@
             [hopper.core]
             [ladder.core]
             [platform-kit.core]
+            [poco.core]
             [star-run.core]
             [tower.core]))
