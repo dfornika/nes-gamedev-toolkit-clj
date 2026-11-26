@@ -2,7 +2,7 @@
 #
 # 1. zeropage: its portable (.cljc) tests on the JVM, then all of its tests
 #    in Node (npm run test:node). The Node tests run generated 6502 code on
-#    the CPU from nes-cljs, which is a sibling checkout (see below).
+#    zeropage's own CPU (zeropage.cpu.simple).
 # 2. cartridj: its portable (.cljc) tests on the JVM. These also build the
 #    catch and hello games, to check ROM output.
 # 3. games: each game builds its ROM and names file, its ClojureScript
@@ -32,12 +32,6 @@ jobs:
         working-directory: libs/zeropage
     steps:
       - uses: actions/checkout@v7
-
-      # zeropage's :test alias depends on ../../../nes-cljs (its 6502 CPU, the
-      # oracle the tests run generated code on): next to this checkout.
-      - name: Check out nes-cljs
-        working-directory: ${{ github.workspace }}
-        run: git clone --depth 1 https://github.com/dfornika/nes-cljs.git ../nes-cljs
 
       - uses: actions/setup-java@v6
         with:

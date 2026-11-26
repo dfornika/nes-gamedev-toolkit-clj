@@ -2,7 +2,7 @@
   "Each rung of the ladder, run on the CPU by itself."
   (:require [cljs.test :refer [deftest is testing]]
             [ladder.core :as ladder]
-            [nes.cpu.core :as cpu]
+            [zeropage.cpu :as cpu]
             [zeropage.harness :as harness]))
 
 (deftest every-rung-builds
@@ -16,25 +16,25 @@
 
 (deftest nil-does-nothing
   (let [{:keys [prg labels]} (ladder/build :nil)
-        {:keys [^js mem ^js s bus] :as m} (harness/machine prg 0xC000)
+        {:keys [^js mem] c :cpu :as m} (harness/machine prg 0xC000)
         before (vec (take 0x800 (array-seq mem)))]
     (is (= [0x4C 0x00 0xC0] (subvec prg 0 3)) "JMP $C000")
     (is (= 0xC000 (:reset labels)))
-    (cpu/jump-to-reset-vector! s bus)
-    (dotimes [_ 1000] (cpu/step! s bus))
-    (is (= 0xC000 (.-pc s)) "still there")
+    (cpu/jump-to-reset-vector! c)
+    (dotimes [_ 1000] (cpu/step! c))
+    (is (= 0xC000 (harness/pc m)) "still there")
     (is (= before (vec (take 0x800 (array-seq mem)))) "and memory is untouched")))
 
 (deftest color-sets-the-backdrop-and-stops
   (let [{:keys [prg labels]} (ladder/build :color)
-        {:keys [^js mem ^js s bus] :as m} (harness/machine prg 0xC000)]
+        {:keys [^js mem] c :cpu :as m} (harness/machine prg 0xC000)]
     (aset mem 0x2002 0x80)                  ; PPUSTATUS: in vertical blank
-    (cpu/jump-to-reset-vector! s bus)
+    (cpu/jump-to-reset-vector! c)
     (harness/run-until! m (:forever labels))
     (is (= ladder/sky-blue (aget mem 0x2007)) "the color went to PPUDATA")
     (is (= 0 (aget mem 0x2006)) "and PPUADDR was pointed away again")
-    (dotimes [_ 100] (cpu/step! s bus))
-    (is (= (:forever labels) (.-pc s)))))
+    (dotimes [_ 100] (cpu/step! c))
+    (is (= (:forever labels) (harness/pc m)))))
 
 (deftest pulse-changes-color-every-16-frames
   (let [m (harness/boot! (harness/console (ladder/build :pulse)))
