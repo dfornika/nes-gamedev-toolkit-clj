@@ -2,4 +2,10 @@
  :builds {:test {:target :node-test
                  :output-to "target/test/test.js"
                  :ns-regexp "-test$"
-                 :autorun true}}}
+                 :autorun true}
+          ;; the same tests on nes-cljs's CPU (see test-nes/)
+          :test-nes {:target :node-test
+                     :output-to "target/test-nes/test.js"
+                     :ns-regexp "-test$"
+                     :js-options {:js-provider :shadow}
+                     :autorun true}}}

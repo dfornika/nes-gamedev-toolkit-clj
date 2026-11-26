@@ -4,7 +4,8 @@
   "description": "",
   "scripts": {
     "test:jvm": "clojure -M:test:test-jvm",
-    "test:node": "clojure -M:test:test-node -m shadow.cljs.devtools.cli compile test && node target/test/test.js"
+    "test:node": "clojure -M:test:test-node -m shadow.cljs.devtools.cli compile test && node target/test/test.js",
+    "test:node-nes": "clojure -M:test:test-node:test-nes -m shadow.cljs.devtools.cli compile test-nes && node target/test-nes/test.js"
   },
   "author": "",
   "license": "ISC",
