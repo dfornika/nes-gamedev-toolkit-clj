@@ -14,7 +14,7 @@
   The result's :symbols go to the assembler, so code says [:lda :player/x]
   and never mentions an address. Its :variables say what's where and of
   what type, which is what a debugger needs to show the game's state by
-  name (NES.cljs turns it into a lens: see nes.debug-info).
+  name (NES.cljs turns it into a lens: see nes.inspect.debug-info).
 
   The NES has 2 KB of RAM, $0000-$07FF. Three parts are special:
 

@@ -13,10 +13,10 @@
   on the classpath). Not wired into a shadow-cljs build yet."
   (:require [cartridj.debug-info :as names]
             [cartridj.rom-edn :as rom-edn]
-            [nes.console :as console]
-            [nes.debug-info :as debug-info]
+            [nes.app.console :as console]
+            [nes.inspect.debug-info :as debug-info]
             [nes.emulator :as emu]
-            [nes.overlay :as overlay]
+            [nes.inspect.overlay :as overlay]
             [nes.rom :as rom]))
 
 ;; What `build` returned for the games played here, by ROM hash, so their
@@ -27,7 +27,7 @@
   "Tell nes-cljs what's known about a built game (what its `build`
   returns), under its ROM's hash: its names (labels and variables, the
   same data its names file holds: see cartridj.debug-info) and its
-  overlays (see nes.overlay). Overlays are functions, so they can't go in
+  overlays (see nes.inspect.overlay). Overlays are functions, so they can't go in
   a names file: only games played from here have them. Returns the ROM as
   a Uint8Array."
   [built]

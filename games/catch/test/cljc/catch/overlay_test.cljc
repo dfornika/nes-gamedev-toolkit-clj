@@ -4,8 +4,8 @@
   alias). Moved here from nes-cljs's nes.overlay-test."
   (:require [clojure.test :refer [deftest is testing]]
             [catch.core :as catch]
-            [nes.debug-info :as di]
-            [nes.overlay :as overlay]))
+            [nes.inspect.debug-info :as di]
+            [nes.inspect.overlay :as overlay]))
 
 (defn- ram-with [& addr-values]
   (reduce (fn [ram [a v]] (assoc ram a v)) (vec (repeat 0x800 0)) (partition 2 addr-values)))

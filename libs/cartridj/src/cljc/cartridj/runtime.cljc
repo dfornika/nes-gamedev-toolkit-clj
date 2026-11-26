@@ -897,7 +897,7 @@
                 with (play-song name) and stopped with (stop-music)
     :overlays   [{:name :doc :draw (fn [variables] shapes)} ...]: things for a
                 debugger to draw over the picture, from the game's variables
-                (NES.cljs: see nes.overlay). Passed through as they are
+                (NES.cljs: see nes.inspect.overlay). Passed through as they are
 
   Returns what rom/nrom returns, with :name."
   [{:keys [name states initial variables tiles palettes screens levels metatiles tables songs overlays]}]
