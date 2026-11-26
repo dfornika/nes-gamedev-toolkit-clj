@@ -2,7 +2,7 @@
 ;; (npm run test:node, from here). Each game's own tests live in its test/
 ;; folder; they all run here, in one Node build, on zeropage's CPU
 ;; (zeropage.cpu, through zeropage.harness). nes-cljs is here for the few
-;; tests that check a game the way the emulator reads it (nes.rom, nes.overlay).
+;; tests that check a game the way the emulator reads it (nes.rom, nes.inspect.overlay).
 {:paths ["../libs/zeropage/test/cljs"
          "catch/test/cljs" "hello/test/cljs" "hopper/test/cljs" "tower/test/cljs"
          "star-run/test/cljs" "ladder/test/cljs" "alienscape/test/cljs"]

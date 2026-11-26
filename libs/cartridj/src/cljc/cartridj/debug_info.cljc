@@ -17,7 +17,7 @@
                    :symbols   {:player/x 0x04 ...}} ; from cartridj.memory/allocate
      :subroutines [{:name :doc} ...]}
 
-  nes-cljs reads it in nes.debug-info.")
+  nes-cljs reads it in nes.inspect.debug-info.")
 
 (defn data
   "The parts of `built` (what a game's `build` returns) that go in the

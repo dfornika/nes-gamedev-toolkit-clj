@@ -41,7 +41,7 @@
   "The operand part of an instruction in standard 6502 assembly syntax.
 
   `name-of` (optional) gives addresses names: (name-of instr addr) -> a
-  name to show instead of the number, or nil. See nes.debug-info/namer."
+  name to show instead of the number, or nil. See nes.inspect.debug-info/namer."
   ([instr] (operand-text instr nil))
   ([{:keys [mode operand target] :as instr} name-of]
    (let [named (fn [addr number] (or (when name-of (name-of instr addr)) number))
