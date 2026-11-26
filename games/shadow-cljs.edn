@@ -1,5 +1,17 @@
 {:deps true
- :builds {:test {:target :node-test
+ ;; nes-cljs's page (index.html, CSS, sample ROMs) comes from the classpath,
+ ;; and so does our compiled code: target/app is on it (see the :app alias in
+ ;; deps.edn) ahead of nes-cljs, so our js/main.js, not whatever an old build
+ ;; of nes-cljs left in its own resources/public/js, is the one served
+ :dev-http {9500 "classpath:public"}
+ :builds {:app {:target :browser
+                :output-dir "target/app/public/js"
+                :asset-path "/js"
+                :modules {:main {:init-fn nes.main/init}}
+                ;; the REPL starts with everything at hand: see cartridj.repl
+                :devtools {:repl-init-ns cartridj.repl
+                           :preloads [nes.dev.portal]}}
+          :test {:target :node-test
                  :output-to "target/test/test.js"
                  :ns-regexp "^(catch|hello|hopper|tower|star-run|ladder|alienscape)\\..*-test$"
                  :js-options {:js-provider :shadow}

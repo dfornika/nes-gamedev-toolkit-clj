@@ -18,4 +18,11 @@
         io.github.dfornika/platform-kit {:local/root "platform-kit"}
         io.github.dfornika/nes-cljs {:local/root "../../nes-cljs"}
         org.clojure/test.check {:mvn/version "1.1.1"}
-        thheller/shadow-cljs {:mvn/version "3.5.4"}}}
+        thheller/shadow-cljs {:mvn/version "3.5.4"}}
+ :aliases
+ ;; The :app build: nes-cljs's app with the toolkit beside it (npm run dev).
+ ;; nes-cljs's own dev code (Portal) comes from its src/dev, and its
+ ;; resources (index.html, CSS, the sample ROMs) from its deps.edn.
+ {:app {:extra-paths ["target/app" "dev" "../../nes-cljs/src/dev"]
+        :extra-deps {binaryage/devtools {:mvn/version "1.0.7"}
+                     djblue/portal {:mvn/version "0.65.0"}}}}}

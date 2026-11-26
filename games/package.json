@@ -3,7 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
+    "dev": "clojure -M:app -m shadow.cljs.devtools.cli watch app",
     "test:node": "clojure -M -m shadow.cljs.devtools.cli compile test && node target/test/test.js"
+  },
+  "dependencies": {
+    "jsnes": "^2.1.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   },
   "devDependencies": {
     "shadow-cljs": "^3.5.4",
