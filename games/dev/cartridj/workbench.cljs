@@ -14,6 +14,7 @@
   (:require [cartridj.debug-info :as names]
             [cartridj.rom-edn :as rom-edn]
             [nes.app.console :as console]
+            [nes.app.current :as current]
             [nes.inspect.debug-info :as debug-info]
             [nes.emulator :as emu]
             [nes.inspect.overlay :as overlay]
@@ -85,7 +86,7 @@
   :source (its program as instructions and its tiles as drawings: only
   for games played from here) or :container (its bytes as hex: any ROM)."
   [kind]
-  (let [file (some-> (console/emulator-instance) emu/rom-file array-seq vec)
+  (let [file (some-> (current/emulator-instance) emu/rom-file array-seq vec)
         sha1 (some-> file clj->js js/Uint8Array.from rom/rom-hash)]
     (case kind
       ;; with the tiles as they are now, in case they've been painted on
