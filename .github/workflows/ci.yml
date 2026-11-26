@@ -5,6 +5,9 @@
 #    the CPU from nes-cljs, which is a sibling checkout (see below).
 # 2. cartridj: its portable (.cljc) tests on the JVM. These also build the
 #    catch and hello games, to check ROM output.
+# 3. games: each game builds its ROM and names file, its ClojureScript
+#    tests run in Node (all in one build: see games/deps.edn), and
+#    alienscape's importer test runs on the JVM.
 
 name: CI
 
@@ -59,7 +62,7 @@ jobs:
             ~/.m2/repository
             ~/.gitlibs
             ~/.deps.clj
-          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn') }}
+          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn', 'games/*/deps.edn') }}
           restore-keys: clj-${{ runner.os }}-
 
       - run: npm ci
@@ -96,8 +99,63 @@ jobs:
             ~/.m2/repository
             ~/.gitlibs
             ~/.deps.clj
-          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn') }}
+          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn', 'games/*/deps.edn') }}
           restore-keys: clj-${{ runner.os }}-
 
       - name: Unit tests (JVM)
         run: clojure -M:test:test-jvm
+
+  games:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: games
+    steps:
+      - uses: actions/checkout@v7
+
+      # The games' tests run on nes-cljs's 6502 CPU, like zeropage's
+      - name: Check out nes-cljs
+        working-directory: ${{ github.workspace }}
+        run: git clone --depth 1 https://github.com/dfornika/nes-cljs.git ../nes-cljs
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: games/package-lock.json
+
+      - name: Install the Clojure CLI
+        run: |
+          curl -fsSL -O https://github.com/clojure/brew-install/releases/latest/download/linux-install.sh
+          chmod +x linux-install.sh
+          sudo ./linux-install.sh
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+          key: clj-${{ runner.os }}-${{ hashFiles('libs/*/deps.edn', 'games/*/deps.edn') }}
+          restore-keys: clj-${{ runner.os }}-
+
+      - run: npm ci
+
+      - name: Unit tests (Node)
+        run: npm run test:node
+
+      - name: Alienscape importer test (JVM)
+        working-directory: games/alienscape
+        run: clojure -M:test-jvm
+
+      # Every game builds a ROM and its names file
+      - name: Build the ROMs
+        run: |
+          for game in catch hello hopper tower star-run ladder alienscape; do
+            (cd "$game" && clojure -T:build rom)
+          done

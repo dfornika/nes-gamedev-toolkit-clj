@@ -1,0 +1,12 @@
+{
+  "name": "games",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:node": "clojure -M -m shadow.cljs.devtools.cli compile test && node target/test/test.js"
+  },
+  "devDependencies": {
+    "shadow-cljs": "^3.5.4",
+    "source-map-support": "^0.5.21"
+  }
+}

@@ -1,0 +1,20 @@
+;; Not a project: the one classpath the games' ClojureScript tests run on
+;; (npm run test:node, from here). Each game's own tests live in its test/
+;; folder; they all run here, in one Node build, on the CPU from nes-cljs
+;; (a sibling checkout, as for libs/zeropage).
+{:paths ["../libs/zeropage/test/cljs"
+         "catch/test/cljs" "hello/test/cljs" "hopper/test/cljs" "tower/test/cljs"
+         "star-run/test/cljs" "ladder/test/cljs" "alienscape/test/cljs"]
+ :deps {io.github.dfornika/zeropage {:local/root "../libs/zeropage"}
+        io.github.dfornika/cartridj {:local/root "../libs/cartridj"}
+        io.github.dfornika/catch {:local/root "catch"}
+        io.github.dfornika/hello {:local/root "hello"}
+        io.github.dfornika/hopper {:local/root "hopper"}
+        io.github.dfornika/tower {:local/root "tower"}
+        io.github.dfornika/star-run {:local/root "star-run"}
+        io.github.dfornika/ladder {:local/root "ladder"}
+        io.github.dfornika/alienscape {:local/root "alienscape"}
+        io.github.dfornika/platform-kit {:local/root "platform-kit"}
+        io.github.dfornika/nes-cljs {:local/root "../../nes-cljs"}
+        org.clojure/test.check {:mvn/version "1.1.1"}
+        thheller/shadow-cljs {:mvn/version "3.5.4"}}}

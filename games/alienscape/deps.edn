@@ -4,7 +4,10 @@
         io.github.dfornika/hopper {:local/root "../hopper"}
         io.github.dfornika/platform-kit {:local/root "../platform-kit"}}
  :aliases
- {:dev {:extra-paths ["../dev"]
+ {:test-jvm {:extra-paths ["test/clj"]
+             :extra-deps {io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+             :main-opts ["-m" "cognitect.test-runner" "-d" "test/clj"]}
+  :dev {:extra-paths ["../dev"]
         :extra-deps {io.github.dfornika/nes-cljs {:local/root "../../../nes-cljs"}
                      thheller/shadow-cljs {:mvn/version "3.5.4"}
                      binaryage/devtools {:mvn/version "1.0.7"}
