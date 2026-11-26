@@ -2,7 +2,11 @@
  :deps {io.github.dfornika/zeropage {:local/root "../../libs/zeropage"}
         io.github.dfornika/cartridj {:local/root "../../libs/cartridj"}}
  :aliases
- {:dev {:extra-paths ["../dev"]
+ {:test-jvm {:extra-paths ["test/cljc"]
+             :extra-deps {io.github.dfornika/nes-cljs {:local/root "../../../nes-cljs"}
+                          io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+             :main-opts ["-m" "cognitect.test-runner" "-d" "test/cljc"]}
+  :dev {:extra-paths ["../dev"]
         :extra-deps {io.github.dfornika/nes-cljs {:local/root "../../../nes-cljs"}
                      thheller/shadow-cljs {:mvn/version "3.5.4"}
                      binaryage/devtools {:mvn/version "1.0.7"}

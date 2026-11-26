@@ -153,9 +153,40 @@ jobs:
         working-directory: games/alienscape
         run: clojure -M:test-jvm
 
+      # Catch's overlay, through nes-cljs's overlay machinery
+      - name: Catch overlay test (JVM)
+        working-directory: games/catch
+        run: clojure -M:test-jvm
+
       # Every game builds a ROM and its names file
       - name: Build the ROMs
         run: |
           for game in catch hello hopper tower star-run ladder alienscape; do
             (cd "$game" && clojure -T:build rom)
           done
+
+      # nes-cljs plays these games from prebuilt files (its
+      # resources/public/roms/cartridj). If a game or the toolkit changed
+      # what it builds, those files are out of date: rebuild them (see the
+      # README there) and commit them to nes-cljs.
+      - name: Built ROMs match nes-cljs's copies
+        run: |
+          samples=../../nes-cljs/resources/public/roms/cartridj
+          status=0
+          check() { # built-file sample-name
+            if ! cmp -s "$1" "$samples/$2"; then
+              echo "::error::$1 differs from nes-cljs's $2"
+              status=1
+            fi
+          }
+          for game in catch hello hopper tower star-run alienscape; do
+            for ext in nes debug.edn; do
+              check "$game/target/roms/$game-alpha.$ext" "$game.$ext"
+            done
+          done
+          for rung in nil color pulse pad sprite; do
+            for ext in nes debug.edn; do
+              check "ladder/target/roms/ladder-$rung.$ext" "ladder-$rung.$ext"
+            done
+          done
+          exit $status
