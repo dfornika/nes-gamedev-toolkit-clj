@@ -59,7 +59,7 @@
   (mapv #(subvec % x (+ x w)) (subvec colors y (+ y h))))
 
 (defn- brightness [color]
-  (let [[r g b] (palette/rgb color)]
+  (let [[r g b] (palette/rgb-palette-jsnes color)]
     (+ (* 0.299 r) (* 0.587 g) (* 0.114 b))))
 
 (defn palettes-for
@@ -92,8 +92,8 @@
 (defn- nearest-in
   "The color in `allowed` that looks most like `color`."
   [color allowed]
-  (let [[r g b] (palette/rgb color)]
-    (apply min-key (fn [c] (let [[r2 g2 b2] (palette/rgb c)]
+  (let [[r g b] (palette/rgb-palette-jsnes color)]
+    (apply min-key (fn [c] (let [[r2 g2 b2] (palette/rgb-palette-jsnes c)]
                              (+ (* (- r r2) (- r r2)) (* (- g g2) (- g g2)) (* (- b b2) (- b b2)))))
            allowed)))
 

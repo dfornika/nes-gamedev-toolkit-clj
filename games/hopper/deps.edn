@@ -1,0 +1,16 @@
+{:paths ["src/cljc"]
+ :deps {io.github.dfornika/zeropage {:local/root "../../libs/zeropage"}
+        io.github.dfornika/cartridj {:local/root "../../libs/cartridj"}
+        io.github.dfornika/catch {:local/root "../catch"}
+        io.github.dfornika/platform-kit {:local/root "../platform-kit"}}
+ :aliases
+ {:dev {:extra-paths ["../dev"]
+        :extra-deps {io.github.dfornika/nes-cljs {:local/root "../../../nes-cljs"}
+                     thheller/shadow-cljs {:mvn/version "3.5.4"}
+                     binaryage/devtools {:mvn/version "1.0.7"}
+                     ;; data browser for tap> (dev builds only)
+                     djblue/portal {:mvn/version "0.65.0"}}}
+  :build {:paths ["src/cljc"]
+          :deps {io.github.clojure/tools.build {:mvn/version "0.10.14"}
+                 io.github.dfornika/hopper {:local/root "."}}
+          :ns-default build}}}
