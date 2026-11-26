@@ -24,7 +24,7 @@
   (let [cartridge (game/build)
         rom-bytes (:rom cartridge)
         container (container rom-bytes)]
-    (.mkdir (io/file roms-dir))
+    (.mkdirs (io/file roms-dir))
     (with-open [w (io/writer cartridge-edn-path)]
       (pprint/pprint cartridge w))
     (with-open [w (io/writer rom-edn-path)]
@@ -36,7 +36,7 @@
         chr (get-in cartridge [:source :chr])
         ines-data (assoc cartridge :chr chr)
         ines-bytes (byte-array (map unchecked-byte (ines ines-data)))]
-    (.mkdir (io/file roms-dir))
+    (.mkdirs (io/file roms-dir))
     (with-open [out (io/output-stream rom-path)]
       (.write out ines-bytes))
     (spit debug-path (debug-info/edn cartridge))))
