@@ -56,8 +56,10 @@ and after (compare the bytes).
 
 ## 2. The asset pipeline
 
-- **Tilesheet importer,** like the sprite one: a PNG with a grid of cells and
-  an EDN naming them. Draw tiles in a pixel editor instead of ASCII.
+- **Tilesheet importer** (**done**: `cartridj.sheets`; poco's `clojure -T:build
+  tiles`): a PNG with a grid of cells, each drawing's `:source` naming its cell.
+  Draw tiles in a pixel editor instead of ASCII. Still to do: items, from
+  sheets too.
 - **`.aseprite` files read directly** (LibreSprite writes them too): frames
   are poses, tags are animations, so there's no export step to forget. The
   file format is documented; parsing it takes a chunk reader and zlib for the
@@ -65,7 +67,7 @@ and after (compare the bytes).
 - **A watcher** that re-imports when a source file changes and reloads the game.
   Pair it with hot-swapping (below) and drawing a tile shows up in the running
   game.
-- **Crossing Windows and WSL:** the editor runs on Windows, the code on WSL.
+- **Crossing Windows and WSL** (**done** as a script: poco's `bin/fetch-art`): the editor runs on Windows, the code on WSL.
   WSL reaches Windows files easily (`/mnt/c/...`), and the other way is
   awkward, so the simple way is a script that copies the source files from a
   Windows folder into the repo, run by the watcher or by hand.

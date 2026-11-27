@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Copy art between a folder on Windows (where the pixel editor saves it) and
+# this game's resources/assets, mirroring subfolders: Windows
+# <folder>/tiles/outdoors.png <-> resources/assets/tiles/outdoors.png.
+#
+#   bin/fetch-art FOLDER             Windows folder -> repo (newer files only)
+#   bin/fetch-art --watch FOLDER     ...and again every 2 seconds, until ^C
+#   bin/fetch-art --push FOLDER      repo -> Windows folder, to start editing
+#                                    what the repo has (newer files only)
+#
+# FOLDER can be a WSL path (/mnt/c/Users/me/art/poco) or a Windows one
+# (C:\Users\me\art\poco). Leave it out if the environment variable
+# POCO_ART_DIR has it.
+#
+# Only the pictures and their editor files are copied: .png, .ase, .aseprite.
+# Then run `clojure -T:build tiles` (and `import` for sprites) to turn them
+# into what the game reads.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+assets="$here/resources/assets"
+
+usage() { sed -n '2,/^$/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+
+watch=false
+push=false
+folder="${POCO_ART_DIR:-}"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --watch) watch=true ;;
+    --push) push=true ;;
+    -h|--help) usage 0 ;;
+    -*) echo "fetch-art: unknown option $1" >&2; usage 1 ;;
+    *) folder="$1" ;;
+  esac
+  shift
+done
+
+[ -n "$folder" ] || { echo "fetch-art: which folder? (give it, or set POCO_ART_DIR)" >&2; usage 1; }
+
+# C:\Users\me\art -> /mnt/c/Users/me/art
+case "$folder" in
+  [A-Za-z]:\\*|[A-Za-z]:/*) folder="$(wslpath -u "$folder")" ;;
+esac
+
+if $push; then from="$assets"; to="$folder"; else from="$folder"; to="$assets"; fi
+[ -d "$from" ] || { echo "fetch-art: there's no folder $from" >&2; exit 1; }
+mkdir -p "$to"
+
+copy_newer() {
+  local n=0 file rel
+  while IFS= read -r -d '' file; do
+    rel="${file#"$from"/}"
+    if [ ! -e "$to/$rel" ] || [ "$file" -nt "$to/$rel" ]; then
+      mkdir -p "$(dirname "$to/$rel")"
+      cp -p "$file" "$to/$rel"
+      echo "copied $rel"
+      n=$((n + 1))
+    fi
+  done < <(find "$from" -type f \( -name '*.png' -o -name '*.ase' -o -name '*.aseprite' \) -print0)
+  return 0
+}
+
+copy_newer
+if $watch; then
+  echo "watching $from (^C to stop)"
+  while sleep 2; do copy_newer; done
+fi

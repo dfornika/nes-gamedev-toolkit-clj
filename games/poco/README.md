@@ -24,7 +24,7 @@ Change something, save, run that line again: a new game, in under a second.
 | File | What's in it |
 |------|--------------|
 | `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick, `d` door, `_` wooden floor, `s` a stick to pick up, `S` a sign). Add a room, add a door to it. |
-| `resources/assets/tiles.edn` | **The background's tiles**: each a drawing (a character a pixel: `. 1 2 3`), its palette by name, and what it's like to walk into (`:kind`). `:over` draws one on another (the stick on the floor). The colors are in `palettes.edn`. |
+| `resources/assets/tiles.edn` | **The background's tiles**: each a cell of a tilesheet (`tiles/outdoors.png`) or a drawing in text (`. 1 2 3`), its palette by name, and what it's like to walk into (`:kind`). `:over` draws one on another (the stick on the floor). The colors are in `palettes.edn`. See "Drawing the background". |
 | `src/cljc/poco/art.cljc` | **How things look**: reads those files, and puts the pictures and colors together; which picture is which step of the walk (`poses`). |
 | `resources/assets/items.edn`, `palettes.edn` | **The items**, as data: each one's drawing (text, a letter a pixel), palette (by name), words, and whether you start with it. `src/cljc/poco/items.cljc` reads and checks them (`cartridj.assets`). |
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
@@ -40,6 +40,43 @@ cd games/poco && clojure -T:build import
 
 (It says exactly which 8x8 tile uses too many colors, if one does: a sprite
 tile can have three colors plus see-through.)
+
+## Drawing the background
+
+The background's tiles are cells of a tilesheet, `resources/assets/tiles/outdoors.png`:
+16x16 pixels each, eight to a row, in the order of `tiles.edn` (each tile's
+`:source` says which cell). Draw them in a pixel editor, then:
+
+```bash
+clojure -T:build tiles
+```
+
+which reads the cells into `sheets.edn` (that's what the game builds from). Rules:
+
+- transparent pixels show the backdrop color (the grass's green);
+- every other pixel has to be exactly one of the tile's palette's three colors
+  (in `palettes.edn`; the NES palette of Aseprite and LibreSprite has them),
+  or `clojure -T:build tiles :nearest? true` takes the closest of the three;
+- a new tile is a new entry in `tiles.edn` with a `:source` cell (add the
+  cell to the sheet, and its colors to a palette if need be).
+
+Mistakes are listed with the tile, the cell and the pixel.
+
+**Windows to WSL:** if the editor is on Windows, `bin/fetch-art` copies the
+pictures between a Windows folder and `resources/assets` (only newer files,
+only `.png`, `.ase` and `.aseprite`). Once:
+
+```bash
+bin/fetch-art --push /mnt/c/Users/you/art/poco   # the repo's pictures -> Windows, to edit
+```
+
+and after drawing (`--watch` keeps copying while you work):
+
+```bash
+bin/fetch-art /mnt/c/Users/you/art/poco && clojure -T:build tiles
+```
+
+(Set `POCO_ART_DIR` to leave the folder out.)
 
 ## Drawing the player
 

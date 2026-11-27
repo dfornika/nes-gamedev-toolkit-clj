@@ -24,6 +24,10 @@
               \".............123\"
               ...]}
 
+  A drawing's pixels can instead come from a sheet, a PNG drawn in a pixel
+  editor: `:source {:sheet :outdoors :cell [0 0]}` (see cartridj.sheets, which
+  reads the PNG, and `with-sources`, which fills the pixels in).
+
   Nothing here reads files: games read their EDN (in ClojureScript, when
   the game is compiled: see poco.util/inline-edn-resource), and hand the
   data over. Every function takes `where`, a few words that say what's being
@@ -47,6 +51,25 @@
            (catch #?(:clj Exception :cljs :default) e
              (fail where (str "the palette " (pr-str name) ": " (ex-message e)) {:palette name})))))
   named)
+
+(defn with-sources
+  "Drawings that come from a sheet (a :source {:sheet name :cell [col row]},
+  see cartridj.sheets) given their :pixels, from `sheets`, what
+  cartridj.sheets imported: {sheet {[col row] rows}}. The others are as they
+  were."
+  [assets sheets where]
+  (mapv (fn [{:keys [id source] :as asset}]
+          (if-not source
+            asset
+            (let [{:keys [sheet cell]} source
+                  rows (get-in sheets [sheet cell])]
+              (when-not rows
+                (fail (str where " (" (pr-str id) ")")
+                      (str "its cell " (pr-str cell) " of the sheet " (pr-str sheet)
+                           " hasn't been imported (see the game's import task)")
+                      {}))
+              (assoc asset :pixels rows))))
+        assets))
 
 (defn drawing
   "Check one drawing against `named` palettes. Returns it with :colors (the
