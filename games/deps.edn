@@ -5,7 +5,7 @@
 ;; tests that check a game the way the emulator reads it (nes.rom, nes.inspect.overlay).
 {:paths ["../libs/zeropage/test/cljs"
          "catch/test/cljs" "hello/test/cljs" "hopper/test/cljs" "tower/test/cljs"
-         "star-run/test/cljs" "ladder/test/cljs" "alienscape/test/cljs"]
+         "star-run/test/cljs" "ladder/test/cljs" "alienscape/test/cljs" "poco/test/cljs"]
  :deps {io.github.dfornika/zeropage {:local/root "../libs/zeropage"}
         io.github.dfornika/cartridj {:local/root "../libs/cartridj"}
         io.github.dfornika/catch {:local/root "catch"}
