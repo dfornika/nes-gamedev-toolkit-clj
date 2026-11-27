@@ -19,3 +19,4 @@ target/
 .clj-kondo/
 .lsp/
 .portal/
+.calva/
