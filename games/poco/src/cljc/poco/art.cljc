@@ -24,18 +24,31 @@
 
 (def poses
   "Which picture is which. Each direction the player can face has a
-  :stand picture and a :walk cycle of four, named after the PNGs
-  (players-03 is the file players-03.png). A picture that isn't imported
-  yet (see `missing`) is drawn as the first one that is, so you can fill
-  these in as you draw them.
+  :stand picture and a :walk cycle of four. A picture is a PNG's name
+  (:players-03 is the file players-03.png), or [top bottom]: the top half
+  (the head and shoulders, the first 16 pixels down) of one PNG with the
+  bottom half (body and legs) of another. So a walking picture doesn't
+  need its own head. A name that isn't imported yet (see `missing`) is
+  drawn as the first picture that is, so you can fill these in as you
+  draw them.
 
-  :flip? draws the picture mirrored. Left is right backwards, so once
-  there are side-on pictures of the player facing right, only :right needs
-  them. (Until then both use the front ones.)"
-  {:down  {:stand :players-03 :walk [:players-01 :players-03 :players-02 :players-03]}
-   :up    {:stand :players-06 :walk [:players-04 :players-06 :players-05 :players-06]}
-   :right {:stand :players-03 :walk [:players-01 :players-03 :players-02 :players-03]}
-   :left  {:stand :players-03 :walk [:players-01 :players-03 :players-02 :players-03] :flip? true}})
+  The PNGs: 01 stands facing us; 02 and 03 are steps facing right, and
+  04 stands facing right; 05 stands facing away, and 06 and 07 are steps
+  facing away.
+
+  :flip? draws the picture mirrored: left is drawn as right, backwards,
+  so side-on art is only needed for one side. Facing us, the steps are
+  made from our head with the legs of the steps facing away."
+  (let [front-stand :players-01
+        front-walk  [[:players-01 :players-06] front-stand [:players-01 :players-07] front-stand]
+        back-stand  :players-05
+        back-walk   [:players-06 back-stand :players-07 back-stand]
+        right-stand :players-04
+        right-walk  [:players-02 right-stand :players-03 right-stand]]
+    {:down  {:stand front-stand :walk front-walk}
+     :up    {:stand back-stand :walk back-walk}
+     :right {:stand right-stand :walk right-walk}
+     :left  {:stand right-stand :walk right-walk :flip? true}}))
 
 (def directions
   "The numbers the game keeps for the way the player faces."
@@ -54,7 +67,12 @@
 (defn missing
   "The pictures `poses` names that haven't been imported."
   []
-  (sort (remove frames (distinct (mapcat (fn [{:keys [stand walk]}] (cons stand walk)) (vals poses))))))
+  (->> (vals poses)
+       (mapcat (fn [{:keys [stand walk]}] (cons stand walk)))
+       (mapcat #(if (vector? %) % [%]))
+       distinct
+       (remove frames)
+       sort))
 
 (defn flip-pieces
   "`pieces` ([tile dx dy palette] ...) as if seen in a mirror: each piece
@@ -65,11 +83,17 @@
          [tile (- width 8 dx) dy (bit-or (or attributes 0) 0x40)])))
 
 (defn pieces
-  "What to draw for `picture` (a name from `poses`), mirrored if `flip?`."
+  "What to draw for `picture` (a name or [top bottom] from `poses`), mirrored if `flip?`."
   [picture flip?]
-  (let [found (or (frames picture)
-                  (:sprites (first (:frames art)))
-                  (throw (ex-info "No player pictures at all: run clojure -T:build import" {})))]
+  (let [frame (fn [name]
+                (or (frames name)
+                    (:sprites (first (:frames art)))
+                    (throw (ex-info "No player pictures at all: run clojure -T:build import" {}))))
+        found (if (vector? picture)
+                (let [[top bottom] picture]
+                  (vec (concat (filter #(< (nth % 2) 16) (frame top))
+                               (remove #(< (nth % 2) 16) (frame bottom)))))
+                (frame picture))]
     (if flip?
       (flip-pieces found (width found))
       found)))
