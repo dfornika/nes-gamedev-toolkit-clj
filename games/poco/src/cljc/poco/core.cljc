@@ -18,6 +18,7 @@
   (:require [zeropage.asm :as asm]
             [zeropage.gen :as gen]
             [zeropage.sub :as sub :refer [call]]
+            [cartridj.hardware :as hw]
             [cartridj.runtime :as rt]
             [cartridj.tileset :as tileset]
             [poco.art :as art]
@@ -30,7 +31,14 @@
 
 (def walk-speed
   "How far the player walks each frame, in pixels."
-  [:imm (gen/fixed 1.5)])
+  1.5)
+
+(def diagonal-speed
+  "How far they walk along each axis when walking diagonally: the speed
+  divided by the square root of two (0.7071). Going 1.5 right AND 1.5 down
+  is really 2.1 pixels along the diagonal, which is why it felt fast.
+  Scaling both by 0.7071 makes the diagonal as long as a straight step."
+  (* walk-speed 0.7071))
 
 (def frames-per-step
   "How many frames of each step of the walking, as a power of two (the
@@ -51,6 +59,7 @@
    [:player {:x :u8.8, :y :u8.8}]                      ; fixed point: it can move by parts of a pixel
    [:facing [:enum (zipmap (range) art/directions)] {:doc "The way the player faces"}]
    [:moving :bool {:doc "Walking this frame"}]
+   [:speed  :u8.8 {:doc "Pixels to walk this frame: less when going diagonally"}]
    [:walk   :u8   {:doc "Counts frames of walking"}]
    [:pose   :u8   {:doc "What to draw: 0 standing, 1 to 4 the steps of the walk"}]
    [:color  :u8   {:doc "Which of the backdrop colors to show"}]
@@ -169,12 +178,31 @@
                 [(gen/move :facing [:imm (.indexOf art/directions facing)])
                  (gen/move :moving [:imm 1])
                  (gen/move16 :rt/old axis)                       ; where we were
-                 ((if (= sign :+) gen/add16 gen/sub16) axis walk-speed)
+                 ((if (= sign :+) gen/add16 gen/sub16) axis :speed)
                  [:lda (gen/whole axis)]
                  [:cmp [:imm edge-at]]
                  (gen/if-flag :carry
                               (leave-room edge (gen/move16 axis :rt/old))
                               (on-feet-solid (gen/move16 axis :rt/old) nil))]))
+
+(def enter-door
+  (sub/sub
+   :enter-door
+   "If the player's feet are in a door, go through it: into the room it
+  leads to (see :door in poco.world), at the place it says."
+   [(rt/probe (gen/whole :player/x) (quot (+ (:left feet) (:right feet)) 2)
+              (gen/whole :player/y) (:top feet))
+    (rt/on-kinds
+     [:door]
+     (by-room
+      (fn [name]
+        (if-let [{:keys [to x y facing]} (get-in (into {} world/rooms) [name :door])]
+          [(gen/move :room [:imm (world/room-number to)])
+           (gen/move16 :player/x [:imm (gen/fixed x)])
+           (gen/move16 :player/y [:imm (gen/fixed y)])
+           (gen/move :facing [:imm (.indexOf art/directions facing)])
+           (rt/restart)]
+          []))))]))
 
 (def move-player
   (sub/sub
@@ -183,6 +211,15 @@
   anything that's gone into something solid. x and y are done separately,
   so the player slides along a wall."
    [(gen/move :moving [:imm 0])
+    ;; diagonal (a left or right held, and an up or down too): the slower speed
+    (gen/move16 :speed [:imm (gen/fixed walk-speed)])
+    [:lda :pad/held]
+    [:and [:imm (bit-or (hw/buttons :left) (hw/buttons :right))]]
+    (gen/when-flag :not-zero
+                   [:lda :pad/held]
+                   [:and [:imm (bit-or (hw/buttons :up) (hw/buttons :down))]]
+                   (gen/when-flag :not-zero
+                                  (gen/move16 :speed [:imm (gen/fixed diagonal-speed)])))
     (step :right {:axis :player/x :sign :+ :facing :right :edge :right :edge-at 240})
     (step :left  {:axis :player/x :sign :- :facing :left  :edge :left  :edge-at 240})
     (step :down  {:axis :player/y :sign :+ :facing :down  :edge :down  :edge-at 208})
@@ -345,6 +382,7 @@
   another room) arrives afresh."
   {:enter  [(draw-room)]
    :update [(call move-player)
+            (call enter-door)
             (call draw-player)
             (call change-backdrop)
             (rt/when-pressed :start (rt/transition :items))

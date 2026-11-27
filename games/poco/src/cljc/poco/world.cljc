@@ -6,6 +6,10 @@
 
     .  grass         f  flowers       =  path
     T  tree (solid)  ~  water (solid) #  brick wall (solid)
+    d  door          _  wooden floor
+
+  A door takes you inside (or back out): `:door` says where to, and where
+  you appear there. Walk into any `d` block.
 
   Walk off the edge of a room, through a gap in its border, and you're in
   the room that's on that side: `:exits` says which. (The gaps and the
@@ -26,19 +30,21 @@
             [poco.art :as art]))
 
 (def legend
-  {\. :grass, \f :flowers, \T :tree, \~ :water, \= :path, \# :brick})
+  {\. :grass, \f :flowers, \T :tree, \~ :water, \= :path, \# :brick,
+   \d :door, \_ :floor})
 
 (def rooms
   "[[name {:rows (15 of 16 characters) :exits {:up :down :left :right room-name}}] ...]"
   [[:home
     {:exits {:up :river, :right :park}
+     :door {:to :house, :x 120, :y 176, :facing :up}
      :rows ["TTTTTTT..TTTTTTT"
             "T......==......T"
             "T..f...==..T...T"
             "T......==......T"
             "T..####==..f...T"
-            "T..####==......T"
-            "T..#..#=========" ; the gap on the right
+            "T..#dd#==......T" ; the house's door
+            "T......========="  ; the gap on the right
             "T......========="
             "T...f..========="
             "T......==......T"
@@ -47,6 +53,24 @@
             "T..f...==...T..T"
             "T......==......T"
             "TTTTTTTTTTTTTTTT"]}]
+
+   [:house
+    {:door {:to :home, :x 72, :y 76, :facing :down}
+     :rows ["################"
+            "#______________#"
+            "#_##___________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#______________#"
+            "#######dd#######"]}]
 
    [:park
     {:exits {:left :home, :up :woods}
