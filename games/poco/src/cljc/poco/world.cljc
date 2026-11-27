@@ -7,6 +7,7 @@
     .  grass         f  flowers       =  path
     T  tree (solid)  ~  water (solid) #  brick wall (solid)
     d  door          _  wooden floor  s  a stick, to pick up
+    S  sign (solid): face it and press A to read it
 
   A door takes you inside (or back out): `:door` says where to, and where
   you appear there. Walk into any `d` block.
@@ -31,13 +32,14 @@
 
 (def legend
   {\. :grass, \f :flowers, \T :tree, \~ :water, \= :path, \# :brick,
-   \d :door, \_ :floor, \s :stick})
+   \d :door, \_ :floor, \s :stick, \S :sign})
 
 (def rooms
   "[[name {:rows (15 of 16 characters) :exits {:up :down :left :right room-name}}] ...]"
   [[:home
     {:exits {:up :river, :right :park}
      :door {:to :house, :x 120, :y 176, :facing :up}
+     :sign ["WELCOME TO" "PORT COQUITLAM!"]
      :rows ["TTTTTTT..TTTTTTT"
             "T......==......T"
             "T..f...==..T...T"
@@ -47,7 +49,7 @@
             "T......========="  ; the gap on the right
             "T......========="
             "T...f..========="
-            "T......==......T"
+            "T.S....==......T"
             "T.T....==...f..T"
             "T......==......T"
             "T..f...==...T..T"
