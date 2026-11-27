@@ -30,7 +30,7 @@ Change something, save, run that line again: a new game, in under a second.
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
 | `src/cljc/poco/talk.cljc` | **What the game says** in its text box: finding an item, and signs (a room's `:sign` in `world.cljc`). |
 | `src/cljc/poco/core.cljc` | **The rules**: walking speed (`walk-speed`), how fast the legs move (`frames-per-step`), the player's feet. |
-| `resources/assets/sprites/*.png` | **The player**, drawn in Aseprite (16x32, one file per picture). |
+| `resources/assets/sprites/player/*.png` | **The player**, drawn in Aseprite (16x32, one file per picture; `player.ase` is the Aseprite file they come from). The other characters and the items are drawn in `sprites/npcs` and `sprites/items`, and aren't in the game yet. | |
 
 After changing the PNGs, turn them into data again:
 
@@ -62,25 +62,38 @@ which reads the cells into `sheets.edn` (that's what the game builds from). Rule
 
 Mistakes are listed with the tile, the cell and the pixel.
 
+**Where the art lives** (the Windows folder has the same layout, so copying
+is one-to-one):
+
+```
+resources/assets/
+  tiles/outdoors.png            the background's tilesheet (tiles.edn says which cell is which)
+  sprites/player/player-NN.png  the player's pictures, and player.ase they come from
+  sprites/npcs/*.ase            the other characters (not in the game yet)
+  sprites/items/items-01.ase    the items' art (not in the game yet)
+  *.edn                         data: items, palettes, tiles; generated: sheets.edn, player.edn
+```
+
 **Windows to WSL:** if the editor is on Windows, `bin/fetch-art` copies the
-pictures between a Windows folder and `resources/assets` (only newer files,
+pictures between the Windows folder (the one that has `tiles/` and `sprites/`
+in it) and `resources/assets` (only newer files,
 only `.png`, `.ase` and `.aseprite`). Once:
 
 ```bash
-bin/fetch-art --push /mnt/c/Users/you/art/poco   # the repo's pictures -> Windows, to edit
+bin/fetch-art --push /mnt/c/Users/you/art/poco/resources/assets   # the repo's pictures -> Windows, to edit
 ```
 
 and after drawing (`--watch` keeps copying while you work):
 
 ```bash
-bin/fetch-art /mnt/c/Users/you/art/poco && clojure -T:build tiles
+bin/fetch-art /mnt/c/Users/you/art/poco/resources/assets && clojure -T:build tiles
 ```
 
 (Set `POCO_ART_DIR` to leave the folder out.)
 
 ## Drawing the player
 
-Name each picture `players-NN.png`. `poco.art/poses` says which is which:
+Name each picture `player-NN.png`. `poco.art/poses` says which is which:
 for each direction (`:down :up :left :right`) a `:stand` picture and a
 `:walk` cycle of four. `(poco.art/missing)` lists the ones named but not
 imported yet; they're drawn as the first picture that *is* imported, so the

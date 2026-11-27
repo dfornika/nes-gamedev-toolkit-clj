@@ -27,14 +27,14 @@ An asset is a map. Something like:
 ```
 
 - **Pixels come from one of two places:** inline strings (hand-drawn, as now),
-  or `:source {:png "players.png" :cell [col row]}` (cut from a sheet). The
+  or `:source {:png "player.png" :cell [col row]}` (cut from a sheet). The
   importers write the second kind, so hand-made and imported art are the same
   thing to everything downstream.
 - **Palettes get names** (`:wood`, `:grass`) in a file of their own, and assets
   refer to them. Then "the stick's colors are the floor's" is something a test
   can check, rather than a coincidence.
 - **Metatiles, poses and kinds are data too:** `{:grass {:art :grass :palette
-  0 :kind :empty}}`, and poses as `{:right {:stand :players-04 :walk [...]}
+  0 :kind :empty}}`, and poses as `{:right {:stand :player-04 :walk [...]}
   :left {:mirror :right}}`. Mirroring is a property of a pose or a tile
   (`:flip [:h]`), not code.
 - **Derived art is declared:** "this drawing over that one" (`:over :floor`,

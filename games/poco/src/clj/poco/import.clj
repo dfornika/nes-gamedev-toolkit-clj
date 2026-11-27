@@ -1,12 +1,12 @@
 (ns poco.import
-  "Turns the pictures in resources/assets/sprites (drawn in Aseprite, one
+  "Turns the pictures in resources/assets/sprites/player (drawn in Aseprite, one
   PNG per frame, 16x32) into the data poco.core builds from:
-  resources/assets/sprites/players.edn, which says which colors are in the
+  resources/assets/sprites/player/player.edn, which says which colors are in the
   sprite palettes, what the tiles look like, and where each frame's eight
   sprites go. See cartridj.sprites for what it checks.
 
     clojure -T:build import                          ; every picture
-    clojure -T:build import :only '[\"players-03\"]'   ; just some
+    clojure -T:build import :only '[\"player-03\"]'   ; just some
 
   Run it again when the pictures change. The EDN it writes is kept in the
   repository, so building the game needs no PNG reader.
@@ -19,11 +19,11 @@
             [cartridj.sheets :as sheets]
             [cartridj.sprites :as sprites]))
 
-(def pictures "resources/assets/sprites")
-(def output "resources/assets/sprites/players.edn")
+(def pictures "resources/assets/sprites/player")
+(def output "resources/assets/sprites/player/player.edn")
 
 (defn import-sprites
-  "`only` is a vector of picture names (\"players-03\"), or nil for all."
+  "`only` is a vector of picture names (\"player-03\"), or nil for all."
   [only]
   (let [art (sprites/import! pictures output
                              :only only

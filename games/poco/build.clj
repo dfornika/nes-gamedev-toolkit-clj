@@ -46,8 +46,8 @@
       (.write out ines-bytes))))
 
 (defn import
-  "Turn the pictures in resources/assets/sprites into players.edn (see
-  poco.import). `:only [\"players-03\"]` imports just those."
+  "Turn the pictures in resources/assets/sprites/player into player.edn (see
+  poco.import). `:only [\"player-03\"]` imports just those."
   [{:keys [only]}]
   (import/import-sprites only))
 

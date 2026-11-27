@@ -1,8 +1,8 @@
 (ns poco.art
   "How The Legend of PoCo looks: every picture, and the colors they're drawn in.
 
-  The player comes from the PNGs in resources/assets/sprites (drawn in
-  Aseprite; `clojure -T:build import` turns them into players.edn, see
+  The player comes from the PNGs in resources/assets/sprites/player (drawn in
+  Aseprite; `clojure -T:build import` turns them into player.edn, see
   poco.import). The background (the ground, trees, doors, signs...) is in
   resources/assets/tiles.edn, drawn in a tilesheet (a PNG: `clojure -T:build
   tiles` turns the cells it uses into sheets.edn), or as text, one character
@@ -25,12 +25,12 @@
 (def art
   "What the importer made from the PNGs: {:palettes :tiles :frames}.
   GENERATED: change the pictures, not this."
-  (util/inline-edn-resource "assets/sprites/players.edn"))
+  (util/inline-edn-resource "assets/sprites/player/player.edn"))
 
 (def poses
   "Which picture is which. Each direction the player can face has a
   :stand picture and a :walk cycle of four. A picture is a PNG's name
-  (:players-03 is the file players-03.png), or [top bottom]: the top half
+  (:player-03 is the file player-03.png), or [top bottom]: the top half
   (the head and shoulders, the first 16 pixels down) of one PNG with the
   bottom half (body and legs) of another. So a walking picture doesn't
   need its own head. A name that isn't imported yet (see `missing`) is
@@ -44,12 +44,12 @@
   :flip? draws the picture mirrored: left is drawn as right, backwards,
   so side-on art is only needed for one side. Facing us, the steps are
   made from our head with the legs of the steps facing away."
-  (let [front-stand :players-01
-        front-walk  [[:players-01 :players-06] front-stand [:players-01 :players-07] front-stand]
-        back-stand  :players-05
-        back-walk   [:players-06 back-stand :players-07 back-stand]
-        right-stand :players-04
-        right-walk  [:players-02 right-stand :players-03 right-stand]]
+  (let [front-stand :player-01
+        front-walk  [[:player-01 :player-06] front-stand [:player-01 :player-07] front-stand]
+        back-stand  :player-05
+        back-walk   [:player-06 back-stand :player-07 back-stand]
+        right-stand :player-04
+        right-walk  [:player-02 right-stand :player-03 right-stand]]
     {:down  {:stand front-stand :walk front-walk}
      :up    {:stand back-stand :walk back-walk}
      :right {:stand right-stand :walk right-walk}
