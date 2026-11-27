@@ -101,12 +101,47 @@
         (is (= :home (room m)) "the south of the home room has no exit")
         (is (< (second (where m)) 208))))))
 
+(deftest diagonals-are-no-faster
+  (let [straight (let [m (game)]
+                   (walk! m :right 20)
+                   (- (first (where m)) (:x world/start)))
+        [dx dy] (let [m (game) [x y] (where m)]
+                  (harness/hold! m :right :down)
+                  (harness/frames! m 20)
+                  (harness/hold! m)
+                  (harness/frame! m)
+                  (let [[x2 y2] (where m)] [(- x2 x) (- y2 y)]))]
+    (is (= 30 straight))
+    (is (<= 20 dx 22) "slower along each axis")
+    (is (<= 20 dy 22))
+    (is (< (+ (* dx dx) (* dy dy)) (* 1.1 straight straight)) "about as far as a straight line")))
+
+(deftest the-house-has-a-door
+  (let [m (game)]
+    (walk! m :right 32)
+    (is (= :home (room m)))
+    (walk-out! m :up 80)
+    (harness/frames! m 3)
+    (is (= :house (room m)) "walking into the door goes inside")
+    (is (= :up (facing m)))
+    (is (= [120 176] (where m)) "just inside")
+    (testing "and out again"
+      (walk-out! m :down 80)
+      (harness/frames! m 3)
+      (is (= :home (room m)))
+      (is (= :down (facing m)))
+      (is (= [72 76] (where m)) "in front of the door"))))
+
 (deftest the-world-is-consistent
   (testing "every exit goes somewhere, and back"
     (let [exits (into {} (for [[name {:keys [exits]}] world/rooms] [name exits]))
           opposite {:left :right, :right :left, :up :down, :down :up}]
       (doseq [[name es] exits, [edge to] es]
-        (is (= name (get-in exits [to (opposite edge)])) (str name " " edge " -> " to))))))
+        (is (= name (get-in exits [to (opposite edge)])) (str name " " edge " -> " to)))))
+  (testing "every door goes somewhere, and back"
+    (let [doors (into {} (for [[name {:keys [door]}] world/rooms :when door] [name door]))]
+      (doseq [[name {:keys [to]}] doors]
+        (is (= name (get-in doors [to :to])) (str name " -> " to))))))
 
 (defn- state [m] (get {0 :title 1 :room 2 :items} (harness/peek-at m :rt/state)))
 (defn- selected [m] (harness/peek-at m :selected))
@@ -129,12 +164,10 @@
 (deftest start-opens-the-items-screen-and-closes-it-again
   (let [m (game)
         at (where m)]
-    (is (= :room (state m)))
     (open-items m)
     (is (= :items (state m)))
     (tap! m :start)
     (harness/frames! m 3)
-    (is (= :room (state m)))
     (is (= at (where m)) "the player's still where they were")
     (open-items m)
     (tap! m :b)

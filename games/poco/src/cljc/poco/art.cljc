@@ -217,6 +217,42 @@
    "1311111111311111"
    "1311111111311111"])
 
+(def door
+  ["3333333333333333"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222211223"
+   "3222222222211223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"
+   "3222222222222223"])
+
+(def floor
+  ["1111111111111111"
+   "1111111111111111"
+   "1111111111111111"
+   "2222222222222222"
+   "1111111211111111"
+   "1111111211111111"
+   "1111111211111111"
+   "2222222222222222"
+   "1111111111111211"
+   "1111111111111211"
+   "1111111111111211"
+   "2222222222222222"
+   "1111121111111111"
+   "1111121111111111"
+   "1111121111111111"
+   "2222222222222222"])
+
 (def cursor-look
   "How the items screen's cursor is drawn: a sprite palette that has white
   in it (the importer picked the palettes, so look), and which of that
@@ -250,6 +286,8 @@
                           [:water   water]
                           [:path    path]
                           [:brick   brick]
+                          [:door    door]
+                          [:floor   floor]
                           [:slot    items/slot]
                           [:cursor  [cursor]]
                           [:font    font/tiles]]
@@ -266,7 +304,9 @@
    :tree    {:tiles (tileset/block tiles :tree)    :palette 1 :kind :solid}
    :water   {:tiles (tileset/block tiles :water)   :palette 2 :kind :solid}
    :path    {:tiles (tileset/block tiles :path)    :palette 3}
-   :brick   {:tiles (tileset/block tiles :brick)   :palette 3 :kind :solid}})
+   :brick   {:tiles (tileset/block tiles :brick)   :palette 3 :kind :solid}
+   :door    {:tiles (tileset/block tiles :door)    :palette 3 :kind :door}
+   :floor   {:tiles (tileset/block tiles :floor)   :palette 3}})
 
 ;; ---------------------------------------------------------------------------
 ;; Colors
