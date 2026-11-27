@@ -56,6 +56,14 @@
   []
   (sort (remove frames (distinct (mapcat (fn [{:keys [stand walk]}] (cons stand walk)) (vals poses))))))
 
+(defn flip-pieces
+  "`pieces` ([tile dx dy palette] ...) as if seen in a mirror: each piece
+  the other side of the middle of a picture that's `width` pixels wide,
+  and flipped left to right."
+  [pieces width]
+  (vec (for [[tile dx dy attributes] pieces]
+         [tile (- width 8 dx) dy (bit-or (or attributes 0) 0x40)])))
+
 (defn pieces
   "What to draw for `picture` (a name from `poses`), mirrored if `flip?`."
   [picture flip?]
@@ -63,7 +71,7 @@
                   (:sprites (first (:frames art)))
                   (throw (ex-info "No player pictures at all: run clojure -T:build import" {})))]
     (if flip?
-      (tileset/flip-pieces found (width found))
+      (flip-pieces found (width found))
       found)))
 
 (defn pose-pieces
