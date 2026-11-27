@@ -13,6 +13,6 @@
                            :preloads [nes.dev.portal]}}
           :test {:target :node-test
                  :output-to "target/test/test.js"
-                 :ns-regexp "^(catch|hello|hopper|tower|star-run|ladder|alienscape)\\..*-test$"
+                 :ns-regexp "^(catch|hello|hopper|tower|star-run|ladder|alienscape|poco)\\..*-test$"
                  :js-options {:js-provider :shadow}
                  :autorun true}}}

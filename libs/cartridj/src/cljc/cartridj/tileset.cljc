@@ -80,3 +80,12 @@
    (let [{:keys [first width height]} (entry tileset name)]
      (vec (for [row (range height), col (range width)]
             [(+ first (* row width) (- width 1 col)) (* 8 col) (* 8 row) (bit-or attributes 0x40)])))))
+
+(defn flip-pieces
+  "`pieces` ([tile dx dy attributes] ...) as if seen in a mirror: each
+  piece the other side of the middle of a picture that's `width` pixels
+  wide, and flipped left to right. For a character that faces both ways
+  but is only drawn facing one."
+  [pieces width]
+  (vec (for [[tile dx dy attributes] pieces]
+         [tile (- width 8 dx) dy (bit-or (or attributes 0) 0x40)])))

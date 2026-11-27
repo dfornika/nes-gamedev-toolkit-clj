@@ -3,7 +3,6 @@
                     [clojure.edn :as edn]))
   #?(:cljs (:require-macros [poco.util :refer [inline-edn-resource]])))
 
-
 #?(:clj
    (defmacro inline-edn-resource [path]
      (if-let [res (io/resource path)]

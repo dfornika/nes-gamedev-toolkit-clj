@@ -1,306 +1,236 @@
 (ns poco.core
-  "Hello, NES: the smallest program that feels like a game. A face on a
-  colored screen; the D-pad moves it, and A changes the background color.
+  "The Legend of PoCo: walk round a little world, one screen at a time.
 
-  The whole cartridge is built from the data in this file by
-  cartridj: `(build)` returns a .nes file's bytes. At the REPL,
-  `(play! (hello/build))` runs it; change something here and run that
-  again.
+  The D-pad walks (the player faces the way they're going, and their legs
+  move while they do); walk off the edge of a room, through a gap, and you
+  arrive in the next one. A and B change the color of the backdrop (the
+  color 'behind' everything: look at the grass). Start goes back to the
+  title.
 
-  How an NES program is organized:
+  This file is the rules. How things look is in poco.art, and where they
+  are in poco.world: that's what to change most. The rest is the machinery
+  that makes a program of it, written in cartridj.runtime's terms: states
+  (the title, and being in a room), each with the code to run when it
+  starts and every frame.
 
-  - RESET is where the CPU starts. It sets the hardware up, then falls
-    into the main loop.
-  - The main loop runs the game's logic once per frame: read the
-    controller, move things, and write down where the sprites should be,
-    in ordinary memory (a 'shadow' copy of sprite memory, at $0200).
-    Then it waits for the next frame.
-  - NMI is an interrupt that the picture chip (PPU) raises 60 times a
-    second, when it has finished drawing a frame ('vertical blank'). Only
-    then is it safe to change what's on screen, so the NMI handler copies
-    the shadow sprites to the PPU and changes any colors, quickly, before
-    drawing starts again.
-
-  The code is written at three levels: single instructions
-  ([:sta :ppuctrl]), code generators (functions that return instructions,
-  from zeropage.gen or defined here), and subroutines (code that
-  lives in one place in the ROM and is called: zeropage.sub)."
-  (:require [zeropage.sub :as sub :refer [call]]
+  At the REPL, `(play! (poco.core/build))` builds the game and runs it:
+  change something in any of the three files and run that again."
+  (:require [zeropage.asm :as asm]
             [zeropage.gen :as gen]
-            [cartridj.chr :as chr]
-            [cartridj.palette :as palette]
-            [cartridj.hardware :as hw]
-            [cartridj.memory :as memory]
-            [cartridj.rom :as rom]
-            [poco.util :as util]))
+            [zeropage.sub :as sub :refer [call]]
+            [cartridj.runtime :as rt]
+            [poco.art :as art]
+            [poco.world :as world]))
 
 ;; ---------------------------------------------------------------------------
-;; Memory: the program's variables. The allocator picks their addresses
-;; (see cartridj.memory); the code below only uses their names. The
-;; same declarations become the game's lens in the Lens tab, and the names
-;; in the CPU tab's disassembly.
+;; Numbers to tune
 
-(def memory
-  (memory/allocate
-   [[:frame        :u8 {:doc "Counts frames; the NMI handler adds 1"}]
-    [:buttons      [:bits hw/button-bits] {:doc "Buttons held down now"}]
-    [:prev-buttons [:bits hw/button-bits] {:doc "...and on the frame before"}]
-    [:pressed      [:bits hw/button-bits] {:doc "Buttons that went down this frame"}]
-    ;; fixed point (a whole byte and a fraction byte each), so it can
-    ;; move by parts of a pixel
-    [:player       {:x :u8.8, :y :u8.8}]
-    [:color        :u8 {:doc "Which of `backgrounds` to show"}]
-    ;; the shadow copy of sprite memory: 64 sprites x 4 bytes. It has to be
-    ;; a whole page, and $0200 is where everyone puts it.
-    [:oam          [:array 256 :u8] {:at 0x0200 :hide true}]]))
-
-;; ---------------------------------------------------------------------------
-;; Graphics and colors
-
-
-(def art
-  "The player's pictures, as data: the sprite palettes, the tiles, and each
-  frame's sprites. GENERATED from the PNGs in resources/assets/sprites by
-  poco.import (clojure -T:build import); change the pictures, not this."
-  (util/inline-edn-resource "assets/sprites/players.edn"))
-
-(def tiles
-  "Tile 0 is blank (the background is filled with it); the player's tiles
-  follow."
-  (into [chr/blank] (map chr/tile (:tiles art))))
-
-(def player-sprites
-  "The player is 16x32, and a sprite is 8x8, so it takes eight sprites that
-  move together (a 'metasprite'): [tile x-offset y-offset palette]. This is
-  the first frame; the importer has the others."
-  (:sprites (first (:frames art))))
-
-;; Colors are numbers from the NES's fixed set of 64
-;; (https://www.nesdev.org/wiki/PPU_palettes; the Palettes tab shows them).
-(def backgrounds
-  "The background colors that A steps through. Eight, so that
-  `color AND 7` is always a valid index."
-  (map palette/color [:light-azure :light-green :red :magenta :light-orange :azure :dark-gray :black]))
-
-(def bg (first backgrounds))
-
-(defn to-hex
-  [n]
-  (format "%X" n))
-
-(def palettes
-  "Four background palettes, then four sprite palettes, of four colors
-  each. The first color of all is the background color; the first of each
-  other palette is unused (it means 'transparent'). The first sprite
-  palette's first entry is the same memory as the background color, so it
-  gets the same value."
-  (let [bg-palettes [(first backgrounds) 0x0F 0x10 0x30,  0 0 0 0,  0 0 0 0,  0 0 0 0]
-        ;; the art's palettes have three colors; the first of each is unused
-        sprite-palettes (take 4 (concat (:palettes art) (repeat [0 0 0])))]
-    (concat bg-palettes (mapcat #(cons 0x0F %) sprite-palettes))))
-
-;; ---------------------------------------------------------------------------
-;; Code generators: functions that return instructions
-
-(defn wait-for-vblank
-  "Wait until the PPU starts a vertical blank. BIT copies bit 7 of
-  PPUSTATUS (the 'in vertical blank' bit) to the negative flag; keep doing
-  that while it's clear ('positive')."
-  []
-  (gen/do-while :positive
-                [:bit :ppustatus]))
-
-(defn set-video-address
-  "Point PPUADDR at a video memory address: high byte, then low."
-  [addr]
-  [[:lda [:imm [:hi addr]]] [:sta :ppuaddr]
-   [:lda [:imm [:lo addr]]] [:sta :ppuaddr]])
-
-(defn when-button
-  "Run `body` if `button` (:a, :left...) is set in the variable `in`.
-  AND leaves only that button's bit, so the result is zero if it's up."
-  [in button & body]
-  [[:lda in]
-   [:and [:imm (hw/buttons button)]]
-   (gen/when-flag :not-zero body)])
-
-;; ---------------------------------------------------------------------------
-;; The program
-
-(def reset
-  [[:label :reset]
-   [:sei]                               ; no interrupts while setting up
-   [:cld]                               ; decimal mode off (the NES has none)
-   [:ldx [:imm 0x40]] [:stx :apu-frame] ; turn off the sound chip's interrupt
-   [:ldx [:imm 0xFF]] [:txs]            ; the stack starts at $01FF
-   [:inx]                               ; X = 0
-   [:stx :ppuctrl]                      ; NMI off
-   [:stx :ppumask]                      ; picture off
-   [:stx :dmc-freq]                     ; sample interrupts off
-
-   ;; The PPU needs about two frames to warm up before it will listen.
-   (wait-for-vblank)
-
-   ;; Meanwhile, clear all 2 KB of RAM: it holds garbage at power on.
-   [:lda [:imm 0]]
-   [:label :clear-ram]
-   (for [page (range 0 0x800 0x100)]
-     [:sta page :x])
-   [:inx]
-   [:bne :clear-ram]
-
-   ;; Sprites can't be turned off one by one, but a sprite with a Y of
-   ;; 240 or more is off the bottom of the screen. Hide all 64.
-   (gen/fill :oam 256 [:imm 0xFF])
-
-   (wait-for-vblank)
-
-   ;; Fill the background (1024 bytes: 4 x 256) with tile 0.
-   (set-video-address (:nametable-0 hw/video))
-   [:lda [:imm 0]]
-   (gen/times 4 {:with :y}
-              (gen/times 256
-                         [:sta :ppudata]))
-
-   ;; Copy the 32 palette colors to video memory.
-   (set-video-address (:palettes hw/video))
-   [:ldx [:imm 0]]
-   [:label :load-palettes]
-   [:lda :palettes :x]
-   [:sta :ppudata]
-   [:inx]
-   [:cpx [:imm (count palettes)]]
-   [:bne :load-palettes]
-
-   ;; Start in the middle of the screen.
-   (gen/move16 :player/x [:imm (gen/fixed 120)])
-   (gen/move16 :player/y [:imm (gen/fixed 112)])
-
-   ;; NMI on. The NMI handler turns the picture on.
-   [:lda [:imm 0x80]] [:sta :ppuctrl]])
-
-(def read-controller
-  (sub/sub
-   :read-controller
-   "Read controller 1 into :buttons, and work out :pressed.
-
-  Writing 1 then 0 to JOY1 makes the controller take a snapshot of its
-  buttons. Each read of JOY1 then gives the next button in bit 0: A, B,
-  Select, Start, Up, Down, Left, Right. LSR moves that bit into the carry
-  flag, and ROL moves the carry into :buttons from the right.
-
-  The loop needs no counter: :buttons starts as 1, and when that 1 has
-  been pushed all the way out of the left side (after 8 ROLs), it lands in
-  the carry flag and the loop stops."
-   [(gen/move :prev-buttons :buttons)
-    [:lda [:imm 1]]
-    [:sta :joy1]
-    [:sta :buttons]
-    [:lsr :a]                           ; A = 0
-    [:sta :joy1]
-    (gen/do-while :no-carry
-                  [:lda :joy1]
-                  [:lsr :a]
-                  [:rol :buttons])
-    ;; pressed = held now, and not held before
-    [:lda :prev-buttons]
-    [:eor [:imm 0xFF]]
-    [:and :buttons]
-    [:sta :pressed]]))
-
-(def speed
-  "How far the face moves each frame, in pixels: a pixel and a half."
+(def walk-speed
+  "How far the player walks each frame, in pixels."
   [:imm (gen/fixed 1.5)])
+
+(def frames-per-step
+  "How many frames of each step of the walking, as a power of two (the
+  number of times to halve the frame count): 3 is 8 frames, so a step
+  takes about an eighth of a second."
+  3)
+
+(def feet
+  "The player is 16x32, but only the feet bump into things: the box from
+  the left, top, right and bottom of their picture."
+  {:left 3 :top 26 :right 12 :bottom 31})
+
+;; ---------------------------------------------------------------------------
+;; What the game remembers
+
+(def variables
+  [[:room   [:enum (zipmap (range) world/room-names)] {:doc "Which room the player is in"}]
+   [:player {:x :u8.8, :y :u8.8}]                      ; fixed point: it can move by parts of a pixel
+   [:facing [:enum (zipmap (range) art/directions)] {:doc "The way the player faces"}]
+   [:moving :bool {:doc "Walking this frame"}]
+   [:walk   :u8   {:doc "Counts frames of walking"}]
+   [:pose   :u8   {:doc "What to draw: 0 standing, 1 to 4 the steps of the walk"}]
+   [:color  :u8   {:doc "Which of the backdrop colors to show"}]])
+
+;; ---------------------------------------------------------------------------
+;; Code generators
+
+(defn by-room
+  "Run (code room-name) for the room the player is in: the code for every
+  room, one after another, each one only when it's the one."
+  [code]
+  (let [done (asm/genlabel "roomed")]
+    [[:lda :room]
+     (for [[i name] (map-indexed vector world/room-names)]
+       [[:cmp [:imm i]]
+        (gen/when-flag :equal
+                       (code name)
+                       [:jmp done])])
+     [:label done]]))
+
+(defn draw-room
+  "Draw the room the player is in (the screen goes blank while it does)."
+  []
+  (rt/draw-screen
+   (by-room #(rt/background %))))
+
+(def start-game
+  [(gen/move :room [:imm (world/room-number (:room world/start))])
+   (gen/move16 :player/x [:imm (gen/fixed (:x world/start))])
+   (gen/move16 :player/y [:imm (gen/fixed (:y world/start))])
+   (gen/move :facing [:imm 0])
+   (gen/move :moving [:imm 0])
+   (gen/move :walk [:imm 0])
+   (gen/move :pose [:imm 0])])
+
+(defn- on-feet-solid
+  "Run `then` if any corner of the player's feet is in something solid,
+  otherwise `else`."
+  [then else]
+  (let [hit (asm/genlabel "bumped")
+        done (asm/genlabel "free")
+        {:keys [left top right bottom]} feet]
+    [(for [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
+       [(rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
+        (rt/on-kinds [:solid] [[:jmp hit]])])
+     else
+     [:jmp done]
+     [:label hit]
+     then
+     [:label done]]))
+
+(defn- leave-room
+  "The player's gone past the `edge` of the room (:left :right :up :down):
+  into the room on that side, if there is one, and otherwise back to where
+  they were (`put-back`). Arriving puts them just inside the opposite edge."
+  [edge put-back]
+  (let [arrive ({:left  #(gen/move16 :player/x [:imm (gen/fixed 222)])
+                 :right #(gen/move16 :player/x [:imm (gen/fixed 2)])
+                 :up    #(gen/move16 :player/y [:imm (gen/fixed 200)])
+                 :down  #(gen/move16 :player/y [:imm (gen/fixed 2)])} edge)
+        exits (into {} world/rooms)]
+    (by-room
+     (fn [name]
+       (if-let [to (get-in exits [name :exits edge])]
+         [(gen/move :room [:imm (world/room-number to)])
+          (arrive)
+          (rt/restart)]             ; start the new room afresh
+         put-back)))))
+
+(defn- step
+  "What walking in a direction does. `axis` is :player/x or :player/y,
+  `sign` which way it changes, `facing` which way that makes the player
+  face, and the player crosses `edge` when the whole pixels of `axis` are
+  `edge-at` or more (walking past 0 wraps round to 255, so that's how
+  walking off the left or top shows up)."
+  [button {:keys [axis sign facing edge edge-at]}]
+  (rt/when-held button
+                [(gen/move :facing [:imm (.indexOf art/directions facing)])
+                 (gen/move :moving [:imm 1])
+                 (gen/move16 :rt/old axis)                       ; where we were
+                 ((if (= sign :+) gen/add16 gen/sub16) axis walk-speed)
+                 [:lda (gen/whole axis)]
+                 [:cmp [:imm edge-at]]
+                 (gen/if-flag :carry
+                              (leave-room edge (gen/move16 axis :rt/old))
+                              (on-feet-solid (gen/move16 axis :rt/old) nil))]))
 
 (def move-player
   (sub/sub
    :move-player
-   "Move the player with the D-pad; A steps to the next background color."
-   [(when-button :buttons :right (gen/add16 :player/x speed))
-    (when-button :buttons :left  (gen/sub16 :player/x speed))
-    (when-button :buttons :down  (gen/add16 :player/y speed))
-    (when-button :buttons :up    (gen/sub16 :player/y speed))
-    (when-button :pressed :a     [:inc :color])
-    (when-button :pressed :b     [:inc :color])]))
+   "Walk with the D-pad: a step in each direction held, then put back
+  anything that's gone into something solid. x and y are done separately,
+  so the player slides along a wall."
+   [(gen/move :moving [:imm 0])
+    (step :right {:axis :player/x :sign :+ :facing :right :edge :right :edge-at 240})
+    (step :left  {:axis :player/x :sign :- :facing :left  :edge :left  :edge-at 240})
+    (step :down  {:axis :player/y :sign :+ :facing :down  :edge :down  :edge-at 208})
+    (step :up    {:axis :player/y :sign :- :facing :up    :edge :up    :edge-at 224})
+    ;; the walk: standing still is pose 0, and walking goes round pose 1 to 4
+    [:lda :moving]
+    (gen/if-flag :not-zero
+                 [[:inc :walk]
+                  [:lda :walk]
+                  (repeat frames-per-step [:lsr :a])
+                  [:and [:imm 3]]
+                  [:clc] [:adc [:imm 1]]
+                  [:sta :pose]]
+                 [(gen/move :walk [:imm 0])
+                  (gen/move :pose [:imm 0])])]))
 
 (def draw-player
   (sub/sub
    :draw-player
-   "Write the player's sprites to the shadow sprite memory. A sprite is
-    4 bytes: Y, tile number, attributes (palette, flipping), X.
+   "Draw the picture for the way the player faces and the step they're on.
+  The loops run when the ROM is built: the NES has the instructions for
+  every picture written out, and picks one."
+   (let [done (asm/genlabel "drawn")]
+     [(for [[i direction] (map-indexed vector art/directions)]
+        [[:lda :facing]
+         [:cmp [:imm i]]
+         (gen/when-flag :equal
+                        (for [pose (range 5)]
+                          [[:lda :pose]
+                           [:cmp [:imm pose]]
+                           (gen/when-flag :equal
+                                          (rt/metasprite (gen/whole :player/x) (gen/whole :player/y)
+                                                         (art/pose-pieces direction pose))
+                                          [:jmp done])]))])
+      [:label done]])))
 
-  The `for` runs when the ROM is built, not on the NES: it writes out the
-  same few instructions once per sprite with different numbers."
-   (for [[i [tile dx dy palette]] (map-indexed vector player-sprites)
-         :let [sprite [:+ :oam (* 8 i)]]]
-     [[:lda (gen/whole :player/y)]
-      [:clc]
-      [:adc [:imm dy]]    [:sta sprite]
-      [:lda [:imm tile]]  [:sta [:+ sprite 1]]
-      [:lda [:imm palette]]     [:sta [:+ sprite 2]]   ; which sprite palette
-      [:lda (gen/whole :player/x)]
-      [:clc]
-      [:adc [:imm dx]]    [:sta [:+ sprite 3]]])))
+(def change-backdrop
+  (sub/sub
+   :change-backdrop
+   "A steps to the next backdrop color, B to the one before. The PPU can
+  only be changed in vertical blank, so this queues a write to the first
+  color of its palette memory ($3F00)."
+   [(rt/when-pressed :a [:inc :color])
+    (rt/when-pressed :b [:dec :color])
+    (rt/queue 0x3F00
+              [[:lda :color] [:and [:imm 7]] [:tay] [:lda :backdrops :y]])]))
 
-(def main
-  [[:label :main]
-   (call read-controller)
-   (call move-player)
-   (call draw-player)
-   ;; Wait until the NMI handler has counted another frame.
-   [:lda :frame]
-   [:label :wait-for-frame]
-   [:cmp :frame]
-   [:beq :wait-for-frame]
-   [:jmp :main]])
+;; ---------------------------------------------------------------------------
+;; States
 
-(def nmi
-  "Runs at the start of every vertical blank, interrupting the main loop
-  wherever it is. So it first saves the registers the main loop was
-  using, on the stack, and puts them back at the end."
-  [[:label :nmi]
-   [:pha] [:txa] [:pha] [:tya] [:pha]
+(def title
+  {:enter  [(rt/draw-screen (rt/background :title))]
+   :update [(rt/when-pressed :start
+                             [start-game
+                              (rt/transition :room)])]})
 
-   ;; Copy the shadow sprites (the page at :oam) to the PPU's sprite memory.
-   [:lda [:imm 0]] [:sta :oamaddr]
-   [:lda [:imm [:hi :oam]]] [:sta :oamdma]
+(def room
+  "Being in a room. Arriving draws it, and `restart` (walking into
+  another room) arrives afresh."
+  {:enter  [(draw-room)]
+   :update [(call move-player)
+            (call draw-player)
+            (call change-backdrop)
+            (rt/when-pressed :start (rt/transition :title))]})
 
-   ;; Set the background color.
-   [:bit :ppustatus]                    ; make PPUADDR expect a high byte
-   (set-video-address (:palettes hw/video))
-   [:lda :color]
-   [:and [:imm 7]]
-   [:tax]
-   [:lda :backgrounds :x]
-   [:sta :ppudata]
+;; ---------------------------------------------------------------------------
+;; The debugger's overlay
 
-   ;; Writing PPUADDR moves where the picture is drawn from, so put that
-   ;; back: no scrolling, NMI still on, picture (background and sprites) on.
-   [:lda [:imm 0x80]] [:sta :ppuctrl]
-   [:lda [:imm 0]] [:sta :ppuscroll] [:sta :ppuscroll]
-   [:lda [:imm 0x1E]] [:sta :ppumask]
-
-   [:inc :frame]                        ; tell the main loop a frame has passed
-
-   [:pla] [:tay] [:pla] [:tax] [:pla]
-   [:rti]])
-
-(def irq
-  "Nothing here asks for IRQs, but the vector has to point somewhere."
-  [[:label :irq]
-   [:rti]])
-
-(def data
-  [[:label :palettes]    [:db palettes]
-   [:label :backgrounds] [:db backgrounds]])
+(def overlays
+  [{:name "Feet"
+    :doc "The box of the player's feet, the only part that bumps into things."
+    :draw (fn [{:keys [player] state :rt.state}]
+            (when (= state :room)
+              (let [{:keys [left top right bottom]} feet]
+                [[:rect {:x (+ (:x player) left) :y (+ (:y player) top)
+                         :w (- (inc right) left) :h (- (inc bottom) top)
+                         :color :lime :label "feet"}]])))}])
 
 (defn build
-  "Build the cartridge. Returns {:rom the .nes file's bytes, :name,
-  :labels, :listing, :symbols, :memory, :subroutines}."
+  "Build the cartridge. Returns {:rom the .nes file's bytes, :name, ...}."
   []
-  (assoc (rom/nrom {:code [reset main nmi irq data]
-                    :vectors {:nmi :nmi :reset :reset :irq :irq}
-                    :symbols hw/registers
-                    :memory memory
-                    :chr (chr/bank tiles)})
-         :name "hello.nes"))
+  (rt/program
+   {:name "poco.nes"
+    :variables variables
+    :tiles (:tiles art/tiles)
+    :palettes art/palettes
+    :screens world/screens
+    :tables {:backdrops art/backgrounds}
+    :overlays overlays
+    :initial :title
+    :states [[:title title]
+             [:room room]]}))
