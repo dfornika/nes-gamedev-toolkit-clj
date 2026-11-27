@@ -4,6 +4,7 @@
   between rooms."
   (:require [cljs.test :refer [deftest is testing]]
             [poco.art :as art]
+            [poco.menu :as menu]
             [poco.core :as poco]
             [poco.world :as world]
             [zeropage.harness :as harness]))
@@ -107,8 +108,94 @@
       (doseq [[name es] exits, [edge to] es]
         (is (= name (get-in exits [to (opposite edge)])) (str name " " edge " -> " to))))))
 
-(deftest start-goes-back-to-the-title
+(defn- state [m] (get {0 :title 1 :room 2 :items} (harness/peek-at m :rt/state)))
+(defn- selected [m] (harness/peek-at m :selected))
+
+(defn- open-items [m]
+  (tap! m :start)
+  (harness/frames! m 3)
+  m)
+
+(deftest select-goes-back-to-the-title
   (let [m (game)]
+    (tap! m :select)
+    (harness/frames! m 3)
+    (is (= :title (state m)))))
+
+(deftest the-player-starts-with-the-starting-items
+  (let [m (game)]
+    (is (= 2r1111 (harness/peek-at m :items)))))
+
+(deftest start-opens-the-items-screen-and-closes-it-again
+  (let [m (game)
+        at (where m)]
+    (is (= :room (state m)))
+    (open-items m)
+    (is (= :items (state m)))
     (tap! m :start)
     (harness/frames! m 3)
-    (is (zero? (harness/peek-at m :rt/state)) "the title is state 0")))
+    (is (= :room (state m)))
+    (is (= at (where m)) "the player's still where they were")
+    (open-items m)
+    (tap! m :b)
+    (harness/frames! m 3)
+    (is (= :room (state m)) "B closes it too")))
+
+(deftest the-cursor-moves-round-the-slots
+  (let [m (open-items (game))]
+    (is (zero? (selected m)))
+    (tap! m :right) (is (= 1 (selected m)))
+    (tap! m :right) (tap! m :right) (is (= 3 (selected m)))
+    (tap! m :right) (is (zero? (selected m)) "round the right side to the left")
+    (tap! m :left) (is (= 3 (selected m)) "and back")
+    (tap! m :down) (is (= 7 (selected m)) "the second row")
+    (tap! m :up) (is (= 3 (selected m)))
+    (tap! m :up) (is (= 7 (selected m)) "two rows, so up wraps round too")))
+
+(deftest the-cursor-is-drawn-round-the-selected-slot
+  (let [m (open-items (game))
+        oam (addr m :oam)
+        corner #(mapv (fn [k] (harness/peek-at m (+ oam (* 4 %) k))) [0 3])]
+    (harness/frames! m 2)                 ; (it blinks: this is in the on half)
+    (is (= (let [[x y] (menu/slot-pixels 0)] [y x]) [(first (corner 0)) (second (corner 0))])
+        "its top left corner is at the slot's top left")
+    (tap! m :right)
+    (harness/frames! m 2)
+    (is (= (first (menu/slot-pixels 1)) (second (corner 0))))))
+
+(defn- queued-line
+  "The tiles of the line of words the game last queued, from `from` in the
+  queue: [address-high address-low count tile...]."
+  [m from]
+  (let [q (addr m :video-queue)
+        at #(harness/peek-at m (+ q %))
+        n (at (+ from 2))]
+    {:address (+ (* 256 (at from)) (at (inc from)))
+     :tiles (mapv #(at (+ from 3 %)) (range n))}))
+
+(defn- spelled [words]
+  (menu/line words))
+
+(deftest the-words-are-for-the-selected-item
+  (let [m (open-items (game))]
+    (testing "the first item's name and what it says, in the two rows"
+      (is (= (spelled "STICK") (:tiles (queued-line m 0))))
+      (is (= (spelled "FOR POKING THINGS.") (:tiles (queued-line m 31)))))
+    (tap! m :right)
+    (is (= (spelled "BASEBALL BAT") (:tiles (queued-line m 0))))
+    (is (= (spelled "SWING IT AT TEENAGERS.") (:tiles (queued-line m 31))))
+    (testing "the words go to the right place on the screen"
+      (is (= 0x2282 (:address (queued-line m 0))) "tile row 20, column 2 is $2000 + 20*32 + 2")
+      (is (= 0x22C2 (:address (queued-line m 31)))))
+    (testing "a slot with no item says ?????"
+      (tap! m :down)
+      (is (= (spelled "?????") (:tiles (queued-line m 0))))
+      (is (= (spelled "") (:tiles (queued-line m 31)))))))
+
+(deftest only-items-the-player-has-have-words
+  (let [m (open-items (game))]
+    (harness/poke-at! m :items 2r1101)    ; no bat
+    (tap! m :right)
+    (is (= (spelled "?????") (:tiles (queued-line m 0))) "the bat isn't there")
+    (tap! m :right)
+    (is (= (spelled "PIZZA SLICE") (:tiles (queued-line m 0))))))

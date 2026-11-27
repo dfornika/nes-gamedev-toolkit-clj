@@ -895,12 +895,13 @@
     :tables     {label bytes}: other data to put in the ROM, each under its label
     :songs      {name notes}: tunes (see cartridj.sound/song), started
                 with (play-song name) and stopped with (stop-music)
+    :prg-size   16384 (default) or 32768: how much room the program has
     :overlays   [{:name :doc :draw (fn [variables] shapes)} ...]: things for a
                 debugger to draw over the picture, from the game's variables
                 (NES.cljs: see nes.inspect.overlay). Passed through as they are
 
   Returns what rom/nrom returns, with :name."
-  [{:keys [name states initial variables tiles palettes screens levels metatiles tables songs overlays]}]
+  [{:keys [name states initial variables tiles palettes screens levels metatiles tables songs overlays prg-size]}]
   (let [states (vec states)
         state-names (mapv first states)
         _ (when-not (some #{initial} state-names)
@@ -957,6 +958,7 @@
                                         {(keyword "level-last" n) (- columns 32)
                                          (keyword "camera-max" n) (* 16 (- columns 16))})))
              :mirroring (if levels? :vertical :horizontal)
+             :prg-size (if prg-size prg-size 16384)
              :memory (memory/allocate (concat (runtime-variables state-names)
                                                (when (seq songs)
                                                  [[:music {:at :u16 :start :u16 :wait :u8 :on :bool}]])

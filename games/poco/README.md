@@ -25,6 +25,8 @@ Change something, save, run that line again: a new game, in under a second.
 |------|--------------|
 | `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick). Add a room, add a door to it. |
 | `src/cljc/poco/art.cljc` | **How things look**: the background tiles (drawn with `. 1 2 3`), the colors, and which picture is which step of the walk (`poses`). |
+| `src/cljc/poco/items.cljc` | **The items**: names, what they say, their pictures (drawn with `. 1 2 3` for now) and which the player starts with. |
+| `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
 | `src/cljc/poco/core.cljc` | **The rules**: walking speed (`walk-speed`), how fast the legs move (`frames-per-step`), the player's feet. |
 | `resources/assets/sprites/*.png` | **The player**, drawn in Aseprite (16x32, one file per picture). |
 
@@ -48,7 +50,7 @@ side-on art only needs to be made facing right.
 
 ## In the game
 
-D-pad: walk. A / B: change the backdrop color. Start: back to the title.
+D-pad: walk. A / B: change the backdrop color. Start: the items screen (D-pad moves the cursor; Start or B goes back). Select: back to the title.
 Walk through a gap in the trees into the next room.
 
 ## Looking inside
