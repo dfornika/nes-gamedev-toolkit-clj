@@ -50,7 +50,7 @@ An asset is a map. Something like:
   working.
 
 Order of work: items first (the simplest: one drawing and a palette; **done**: `cartridj.assets`, and poco's `assets/items.edn` and `palettes.edn`), then
-background tiles and metatiles, then sprites and poses. Each step moves one
+background tiles and metatiles (**done**: `assets/tiles.edn`, with `:over` for derived art), then sprites and poses (the cursor and the text box font are still made in code). Each step moves one
 kind of asset out of Clojure source, and the game builds the same ROM before
 and after (compare the bytes).
 

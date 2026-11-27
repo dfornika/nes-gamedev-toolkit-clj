@@ -24,7 +24,8 @@ Change something, save, run that line again: a new game, in under a second.
 | File | What's in it |
 |------|--------------|
 | `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick, `d` door, `_` wooden floor, `s` a stick to pick up, `S` a sign). Add a room, add a door to it. |
-| `src/cljc/poco/art.cljc` | **How things look**: the background tiles (drawn with `. 1 2 3`), the colors, and which picture is which step of the walk (`poses`). |
+| `resources/assets/tiles.edn` | **The background's tiles**: each a drawing (a character a pixel: `. 1 2 3`), its palette by name, and what it's like to walk into (`:kind`). `:over` draws one on another (the stick on the floor). The colors are in `palettes.edn`. |
+| `src/cljc/poco/art.cljc` | **How things look**: reads those files, and puts the pictures and colors together; which picture is which step of the walk (`poses`). |
 | `resources/assets/items.edn`, `palettes.edn` | **The items**, as data: each one's drawing (text, a letter a pixel), palette (by name), words, and whether you start with it. `src/cljc/poco/items.cljc` reads and checks them (`cartridj.assets`). |
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
 | `src/cljc/poco/talk.cljc` | **What the game says** in its text box: finding an item, and signs (a room's `:sign` in `world.cljc`). |
