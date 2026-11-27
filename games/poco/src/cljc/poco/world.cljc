@@ -6,7 +6,7 @@
 
     .  grass         f  flowers       =  path
     T  tree (solid)  ~  water (solid) #  brick wall (solid)
-    d  door          _  wooden floor
+    d  door          _  wooden floor  s  a stick, to pick up
 
   A door takes you inside (or back out): `:door` says where to, and where
   you appear there. Walk into any `d` block.
@@ -31,7 +31,7 @@
 
 (def legend
   {\. :grass, \f :flowers, \T :tree, \~ :water, \= :path, \# :brick,
-   \d :door, \_ :floor})
+   \d :door, \_ :floor, \s :stick})
 
 (def rooms
   "[[name {:rows (15 of 16 characters) :exits {:up :down :left :right room-name}}] ...]"
@@ -56,13 +56,15 @@
 
    [:house
     {:door {:to :home, :x 72, :y 76, :facing :down}
+     ;; the item lying in the room, and which block it's in (column, row)
+     :pickup {:item :stick, :at [11 6]}
      :rows ["################"
             "#______________#"
             "#_##___________#"
             "#______________#"
             "#______________#"
             "#______________#"
-            "#______________#"
+            "#__________s___#"
             "#______________#"
             "#______________#"
             "#______________#"

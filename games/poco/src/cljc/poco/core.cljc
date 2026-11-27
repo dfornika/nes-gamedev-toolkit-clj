@@ -115,12 +115,36 @@
   [(video-address 0x3F00)
    (copy-palettes :item-palettes 0)])
 
+(defn- item-bit
+  "The mask for the bit that says the player has `item`."
+  [item]
+  (menu/bit-of (first (keep-indexed (fn [i {:keys [id]}] (when (= id item) i)) items/items))))
+
+(defn- take-away-pickup
+  "Inside draw-screen: if the player has already taken the item that's
+  lying in this room (see :pickup in poco.world), draw the floor over it."
+  [name]
+  (when-let [{:keys [item at]} (:pickup (get (into {} world/rooms) name))]
+    (let [[c r] at
+          [top-left top-right bottom-left bottom-right]
+          (tileset/block art/tiles :floor)]
+      [[:lda :items]
+       [:and [:imm (item-bit item)]]
+       (gen/when-flag :not-zero
+                      (rt/at (* 2 c) (* 2 r))
+                      [:lda [:imm top-left]] [:sta :ppudata]
+                      [:lda [:imm top-right]] [:sta :ppudata]
+                      (rt/at (* 2 c) (inc (* 2 r)))
+                      [:lda [:imm bottom-left]] [:sta :ppudata]
+                      [:lda [:imm bottom-right]] [:sta :ppudata])])))
+
 (defn draw-room
   "Draw the room the player is in (the screen goes blank while it does)."
   []
   (rt/draw-screen
    (world-palettes)
-   (by-room #(rt/background %))))
+   (by-room #(rt/background %))
+   (by-room take-away-pickup)))
 
 (def start-game
   [(gen/move :room [:imm (world/room-number (:room world/start))])
@@ -202,6 +226,29 @@
            (gen/move16 :player/y [:imm (gen/fixed y)])
            (gen/move :facing [:imm (.indexOf art/directions facing)])
            (rt/restart)]
+          []))))]))
+
+(def pick-up
+  (sub/sub
+   :pick-up
+   "If the player's feet are on an item lying about, take it: it's theirs
+  (a bit of `items`), and the room is drawn again without it. An item
+  that's been taken is still there as far as the map goes, so it only
+  counts the first time."
+   [(rt/probe (gen/whole :player/x) (quot (+ (:left feet) (:right feet)) 2)
+              (gen/whole :player/y) (quot (+ (:top feet) (:bottom feet)) 2))
+    (rt/on-kinds
+     [:pickup]
+     (by-room
+      (fn [name]
+        (if-let [{:keys [item]} (:pickup (get (into {} world/rooms) name))]
+          [[:lda :items]
+           [:and [:imm (item-bit item)]]
+           (gen/when-flag :zero
+                          [:lda :items]
+                          [:ora [:imm (item-bit item)]]
+                          [:sta :items]
+                          (rt/restart))]
           []))))]))
 
 (def move-player
@@ -383,6 +430,7 @@
   {:enter  [(draw-room)]
    :update [(call move-player)
             (call enter-door)
+            (call pick-up)
             (call draw-player)
             (call change-backdrop)
             (rt/when-pressed :start (rt/transition :items))

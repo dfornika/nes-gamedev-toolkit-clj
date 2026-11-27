@@ -253,6 +253,15 @@
    "1111121111111111"
    "2222222222222222"])
 
+(def stick-on-floor
+  "The stick (poco.items), lying on the floor: its see-through pixels are
+  the floor's. (A background tile has no see-through: it's the backdrop,
+  which in the world is the grass color. The stick's colors are the
+  floor's, palette 3, so it can lie on it.)"
+  (mapv (fn [item-row floor-row]
+          (apply str (map #(if (= %1 \.) %2 %1) item-row floor-row)))
+        items/stick floor))
+
 (def cursor-look
   "How the items screen's cursor is drawn: a sprite palette that has white
   in it (the importer picked the palettes, so look), and which of that
@@ -288,6 +297,7 @@
                           [:brick   brick]
                           [:door    door]
                           [:floor   floor]
+                          [:stick   stick-on-floor]
                           [:slot    items/slot]
                           [:cursor  [cursor]]
                           [:font    font/tiles]]
@@ -306,7 +316,8 @@
    :path    {:tiles (tileset/block tiles :path)    :palette 3}
    :brick   {:tiles (tileset/block tiles :brick)   :palette 3 :kind :solid}
    :door    {:tiles (tileset/block tiles :door)    :palette 3 :kind :door}
-   :floor   {:tiles (tileset/block tiles :floor)   :palette 3}})
+   :floor   {:tiles (tileset/block tiles :floor)   :palette 3}
+   :stick   {:tiles (tileset/block tiles :stick)   :palette 3 :kind :pickup}})
 
 ;; ---------------------------------------------------------------------------
 ;; Colors

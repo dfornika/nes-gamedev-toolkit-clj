@@ -27,7 +27,7 @@
 (def kinds
   "What a block is like to bump into, as the numbers in a screen's :solid
   map. :ladder-top isn't drawn: it's worked out (see `kind-bytes`)."
-  {:empty 0 :solid 1 :one-way 2 :ladder 3 :ladder-top 4 :door 5})
+  {:empty 0 :solid 1 :one-way 2 :ladder 3 :ladder-top 4 :door 5 :pickup 6})
 
 (defn- kind-of [m]
   (let [k (cond (:kind m) (:kind m) (:solid? m) :solid :else :empty)]
