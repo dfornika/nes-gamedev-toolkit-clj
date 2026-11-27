@@ -28,32 +28,18 @@
   (util/inline-edn-resource "assets/sprites/player/player.edn"))
 
 (def poses
-  "Which picture is which. Each direction the player can face has a
-  :stand picture and a :walk cycle of four. A picture is a PNG's name
-  (:player-03 is the file player-03.png), or [top bottom]: the top half
-  (the head and shoulders, the first 16 pixels down) of one PNG with the
-  bottom half (body and legs) of another. So a walking picture doesn't
-  need its own head. A name that isn't imported yet (see `missing`) is
-  drawn as the first picture that is, so you can fill these in as you
-  draw them.
-
-  The PNGs: 01 stands facing us; 02 and 03 are steps facing right, and
-  04 stands facing right; 05 stands facing away, and 06 and 07 are steps
-  facing away.
-
-  :flip? draws the picture mirrored: left is drawn as right, backwards,
-  so side-on art is only needed for one side. Facing us, the steps are
-  made from our head with the legs of the steps facing away."
-  (let [front-stand :player-01
-        front-walk  [[:player-01 :player-06] front-stand [:player-01 :player-07] front-stand]
-        back-stand  :player-05
-        back-walk   [:player-06 back-stand :player-07 back-stand]
-        right-stand :player-04
-        right-walk  [:player-02 right-stand :player-03 right-stand]]
-    {:down  {:stand front-stand :walk front-walk}
-     :up    {:stand back-stand :walk back-walk}
-     :right {:stand right-stand :walk right-walk}
-     :left  {:stand right-stand :walk right-walk :flip? true}}))
+  "Which picture is which: {direction {:stand picture :walk [four pictures]}},
+  from resources/assets/sprites/player/poses.edn (which says how a picture
+  is named, and how left is drawn as right). A direction that's a :mirror
+  of another gets that one's pictures and :flip? true."
+  (let [data (util/inline-edn-resource "assets/sprites/player/poses.edn")]
+    (into {} (for [[direction {:keys [mirror] :as pose}] data]
+               [direction (if mirror
+                            (assoc (or (data mirror)
+                                       (throw (ex-info (str "poses.edn: " (pr-str direction) " mirrors "
+                                                            (pr-str mirror) ", which isn't there") {})))
+                                   :flip? true)
+                            pose)]))))
 
 (def directions
   "The numbers the game keeps for the way the player faces."

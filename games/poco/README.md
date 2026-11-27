@@ -25,7 +25,7 @@ Change something, save, run that line again: a new game, in under a second.
 |------|--------------|
 | `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick, `d` door, `_` wooden floor, `s` a stick to pick up, `S` a sign). Add a room, add a door to it. |
 | `resources/assets/tiles.edn` | **The background's tiles**: each a cell of a tilesheet (`tiles/outdoors.png`) or a drawing in text (`. 1 2 3`), its palette by name, and what it's like to walk into (`:kind`). `:over` draws one on another (the stick on the floor). The colors are in `palettes.edn`. See "Drawing the background". |
-| `src/cljc/poco/art.cljc` | **How things look**: reads those files, and puts the pictures and colors together; which picture is which step of the walk (`poses`). |
+| `src/cljc/poco/art.cljc` | **How things look**: reads those files, and puts the pictures and colors together; which picture is which step of the walk (`poses`, from `poses.edn`). |
 | `resources/assets/items.edn`, `palettes.edn` | **The items**, as data: each one's drawing (text, a letter a pixel), palette (by name), words, and whether you start with it. `src/cljc/poco/items.cljc` reads and checks them (`cartridj.assets`). |
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
 | `src/cljc/poco/talk.cljc` | **What the game says** in its text box: finding an item, and signs (a room's `:sign` in `world.cljc`). |
@@ -93,11 +93,11 @@ bin/fetch-art /mnt/c/Users/you/art/poco/resources/assets && clojure -T:build til
 
 ## Drawing the player
 
-Name each picture `player-NN.png`. `poco.art/poses` says which is which:
-for each direction (`:down :up :left :right`) a `:stand` picture and a
+Name each picture `player-NN.png`. `sprites/player/poses.edn` says which is
+which: for each direction (`:down :up :left :right`) a `:stand` picture and a
 `:walk` cycle of four. `(poco.art/missing)` lists the ones named but not
 imported yet; they're drawn as the first picture that *is* imported, so the
-game always works. Left is drawn as right, mirrored (`:flip? true`), so
+game always works. Left is drawn as right, mirrored (`:left {:mirror :right}`), so
 side-on art only needs to be made facing right.
 
 ## In the game

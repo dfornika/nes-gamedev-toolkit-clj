@@ -179,6 +179,11 @@
     (is (= :room (state m)))
     (is (= :home (room m)))))
 
+(deftest left-is-right-mirrored
+  (is (= (dissoc (art/poses :right) :flip?) (dissoc (art/poses :left) :flip?)))
+  (is (:flip? (art/poses :left)))
+  (is (not (:flip? (art/poses :right)))))
+
 (deftest every-message-fits
   (is (= (* 64 (count talk/messages)) (count talk/table))))
 
