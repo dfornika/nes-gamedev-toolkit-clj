@@ -4,9 +4,10 @@
   The player comes from the PNGs in resources/assets/sprites (drawn in
   Aseprite; `clojure -T:build import` turns them into players.edn, see
   poco.import). The background (the ground, trees, doors, signs...) is in
-  resources/assets/tiles.edn, drawn as text, one character a pixel: . is
-  see-through (or the backdrop), and 1 2 3 are the palette's three colors;
-  the colors themselves are in palettes.edn. This file reads and checks
+  resources/assets/tiles.edn, drawn in a tilesheet (a PNG: `clojure -T:build
+  tiles` turns the cells it uses into sheets.edn), or as text, one character
+  a pixel: . is see-through (or the backdrop), and 1 2 3 are the palette's
+  three colors; the colors themselves are in palettes.edn. This file reads and checks
   them (see cartridj.assets), and puts it all together.
 
   Change a drawing or a color, then `(play! (poco.core/build))` at the REPL."
@@ -116,10 +117,13 @@
   "The background's drawings, checked (see cartridj.assets):
   {:backdrops :palettes :metatiles}. In resources/assets/tiles.edn."
   (let [data (util/inline-edn-resource "assets/tiles.edn")
+        sheets (util/inline-edn-resource "assets/sheets.edn")
         colors (assets/palettes (util/inline-edn-resource "assets/palettes.edn") "palettes.edn")]
     (assoc data
            :colors colors
-           :metatiles (assets/drawings (:metatiles data) colors "tiles.edn"))))
+           :metatiles (-> (:metatiles data)
+                          (assets/with-sources sheets "tiles.edn")
+                          (assets/drawings colors "tiles.edn")))))
 
 (def box-font
   "The font on a solid background, for the text box: the letters are color

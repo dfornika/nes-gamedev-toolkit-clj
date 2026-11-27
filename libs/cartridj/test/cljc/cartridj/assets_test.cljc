@@ -46,6 +46,13 @@
       (is (re-find #"not the size"
                    (error-of #(assets/drawings [floor (assoc mark :pixels (repeat 16 (apply str (repeat 16 \.))))] named "x")))))))
 
+(deftest drawings-from-sheets
+  (let [sheets {:s {[0 0] (vec (repeat 8 row))}}
+        from (fn [cell] [{:id :x :palette :wood :source {:sheet :s :cell cell}}])]
+    (is (= (vec (repeat 8 row)) (:pixels (first (assets/with-sources (from [0 0]) sheets "tiles.edn")))))
+    (is (re-find #"hasn't been imported" (error-of #(assets/with-sources (from [1 0]) sheets "tiles.edn"))))
+    (is (= [stick] (assets/with-sources [stick] sheets "x")) "drawings with their own pixels are left alone")))
+
 (deftest palettes-get-slots
   (is (= {:wood 1 :pizza 2} (assets/slots [:wood :wood :pizza :wood] 1 3 "items")))
   (is (re-find #"4 palettes" (error-of #(assets/slots [:a :b :c :d] 1 3 "items")))))

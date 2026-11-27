@@ -2,7 +2,6 @@
   (:require [clojure.tools.build.api :as b]
             [clojure.java.io :as io]
             [clojure.pprint :as pprint]
-            [poco.core :as game]
             [poco.import :as import]
             [cartridj.rom-edn :refer [container]]
             [cartridj.rom :refer [ines]]))
@@ -15,12 +14,19 @@
 (def rom-edn-path (format (str roms-dir "/%s-%s.nes.edn") (name game) version))
 (def cartridge-edn-path (format (str roms-dir "/%s-%s.cartridge.edn") (name game) version))
 
+(defn- build-game
+  "The game's cartridge. (The game is loaded now, not when this file is: the
+  import tasks have to run when the game can't be loaded, because its art
+  is what they make.)"
+  []
+  ((requiring-resolve 'poco.core/build)))
+
 (defn clean [_]
   (b/delete {:path roms-dir}))
 
 (defn rom-edn
   [_]
-  (let [cartridge (game/build)
+  (let [cartridge (build-game)
         rom-bytes (:rom cartridge)
         container (container rom-bytes)]
     (.mkdirs (io/file roms-dir))
@@ -31,7 +37,7 @@
 
 (defn rom
   [_]
-  (let [cartridge (game/build)
+  (let [cartridge (build-game)
         chr (get-in cartridge [:source :chr])
         ines-data (assoc cartridge :chr chr)
         ines-bytes (byte-array (map unchecked-byte (ines ines-data)))]
@@ -44,3 +50,11 @@
   poco.import). `:only [\"players-03\"]` imports just those."
   [{:keys [only]}]
   (import/import-sprites only))
+
+(defn tiles
+  "Turn the cells of the tilesheets (resources/assets/tiles/*.png) that
+  tiles.edn uses into resources/assets/sheets.edn (see poco.import).
+  `:nearest? true` takes the closest of a palette's colors for pixels
+  that aren't exactly one."
+  [opts]
+  (import/import-tiles (select-keys opts [:nearest?])))
