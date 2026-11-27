@@ -32,6 +32,20 @@
   (testing "the same id twice"
     (is (re-find #":stick" (error-of #(assets/drawings [stick stick] named "x"))))))
 
+(deftest drawings-over-others
+  (let [floor {:id :floor :palette :wood :pixels (vec (repeat 8 "11111111"))}
+        mark  {:id :mark :over :floor :palette :wood :pixels (into ["..2....."] (repeat 7 row))}
+        [_ composed] (assets/drawings [floor mark] named "x")]
+    (is (= (into ["11211111"] (repeat 7 "11111111")) (:pixels composed)))
+    (testing "the one underneath can come later"
+      (is (= (:pixels composed) (:pixels (first (assets/drawings [mark floor] named "x"))))))
+    (testing "mistakes"
+      (is (re-find #"isn't there" (error-of #(assets/drawings [mark] named "x"))))
+      (is (re-find #"another palette"
+                   (error-of #(assets/drawings [floor (assoc mark :palette :wood2)] (assoc named :wood2 [1 2 3]) "x"))))
+      (is (re-find #"not the size"
+                   (error-of #(assets/drawings [floor (assoc mark :pixels (repeat 16 (apply str (repeat 16 \.))))] named "x")))))))
+
 (deftest palettes-get-slots
   (is (= {:wood 1 :pizza 2} (assets/slots [:wood :wood :pizza :wood] 1 3 "items")))
   (is (re-find #"4 palettes" (error-of #(assets/slots [:a :b :c :d] 1 3 "items")))))

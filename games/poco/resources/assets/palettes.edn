@@ -3,4 +3,7 @@
 {:ui          [:white :light-gray :gray]
  :wood        [:light-orange :brown :dark-brown]
  :pizza       [:light-yellow :red :light-orange]
- :firecracker [:white :red :dark-red]}
+ :firecracker [:white :red :dark-red]
+ :grass       [:light-green :dark-green :light-yellow]
+ :trees       [:dark-green :green :dark-brown]
+ :water       [:azure :light-azure :white]}

@@ -3,12 +3,15 @@
 
   The player comes from the PNGs in resources/assets/sprites (drawn in
   Aseprite; `clojure -T:build import` turns them into players.edn, see
-  poco.import). The background tiles are drawn right here as text, one
-  character a pixel: . is see-through (or the backdrop), and 1 2 3 are the
-  palette's three colors.
+  poco.import). The background (the ground, trees, doors, signs...) is in
+  resources/assets/tiles.edn, drawn as text, one character a pixel: . is
+  see-through (or the backdrop), and 1 2 3 are the palette's three colors;
+  the colors themselves are in palettes.edn. This file reads and checks
+  them (see cartridj.assets), and puts it all together.
 
   Change a drawing or a color, then `(play! (poco.core/build))` at the REPL."
-  (:require [cartridj.chr :as chr]
+  (:require [cartridj.assets :as assets]
+            [cartridj.chr :as chr]
             [cartridj.font :as font]
             [cartridj.palette :as palette]
             [cartridj.tileset :as tileset]
@@ -109,180 +112,14 @@
 ;; ---------------------------------------------------------------------------
 ;; The background
 
-(def grass
-  ["................"
-   "................"
-   "....1...........",
-   "...1............"
-   "................"
-   "..........1....."
-   ".........1......"
-   "................"
-   "................"
-   "......1........."
-   ".....1.........."
-   "................"
-   "..........1....."
-   ".........1......"
-   "................"
-   "................"])
-
-(def flowers
-  ["................"
-   "..33............"
-   ".3223...........",
-   "..33.....33....."
-   "...1....3223...."
-   "...1.....33....."
-   "....1....1......"
-   "..........1....."
-   "................"
-   "......33........"
-   ".....3223......."
-   "......33........"
-   ".......1........"
-   ".......1........"
-   "................"
-   "................"])
-
-(def tree
-  ["................"
-   "......1111......"
-   "....11222211...."
-   "...1222222221..."
-   "..122222222221.."
-   "..122322222221.."
-   ".12233222222221."
-   ".12222222232221."
-   ".12222222222221."
-   "..122222222221.."
-   "...1222222221..."
-   "....11222211...."
-   ".......33......."
-   ".......33......."
-   "......3333......"
-   "......3333......"])
-
-(def water
-  ["2222222222222222"
-   "2222222222222222"
-   "2221122222222222"
-   "2222211222221122"
-   "2222222222222222"
-   "2222222222222222"
-   "2222222211222222"
-   "1122222222112222"
-   "2222222222222222"
-   "2222222222222222"
-   "2222111222222222"
-   "2222222221122222"
-   "2222222222222222"
-   "2112222222222222"
-   "2222222222211222"
-   "2222222222222222"])
-
-(def path
-  ["1111111111111111"
-   "1111111111111111"
-   "1111211111111111"
-   "1111111111121111"
-   "1111111111111111"
-   "1211111111111111"
-   "1111111111111211"
-   "1111111111111111"
-   "1111111111111111"
-   "1111112111111111"
-   "1111111111111111"
-   "1121111111111111"
-   "1111111111112111"
-   "1111111111111111"
-   "1111111211111111"
-   "1111111111111111"])
-
-(def brick
-  ["3333333333333333"
-   "1111111311111113"
-   "1111111311111113"
-   "1111111311111113"
-   "3333333333333333"
-   "1311111111311111"
-   "1311111111311111"
-   "1311111111311111"
-   "3333333333333333"
-   "1111111311111113"
-   "1111111311111113"
-   "1111111311111113"
-   "3333333333333333"
-   "1311111111311111"
-   "1311111111311111"
-   "1311111111311111"])
-
-(def door
-  ["3333333333333333"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222211223"
-   "3222222222211223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"
-   "3222222222222223"])
-
-(def floor
-  ["1111111111111111"
-   "1111111111111111"
-   "1111111111111111"
-   "2222222222222222"
-   "1111111211111111"
-   "1111111211111111"
-   "1111111211111111"
-   "2222222222222222"
-   "1111111111111211"
-   "1111111111111211"
-   "1111111111111211"
-   "2222222222222222"
-   "1111121111111111"
-   "1111121111111111"
-   "1111121111111111"
-   "2222222222222222"])
-
-(def stick-on-floor
-  "The stick (poco.items), lying on the floor: its see-through pixels are
-  the floor's. (A background tile has no see-through: it's the backdrop,
-  which in the world is the grass color. The stick's colors are the
-  floor's, palette 3, so it can lie on it.)"
-  (mapv (fn [item-row floor-row]
-          (apply str (map #(if (= %1 \.) %2 %1) item-row floor-row)))
-        (items/drawing :stick) floor))
-
-(def sign
-  "A sign, standing in the grass."
-  (mapv (fn [sign-row grass-row]
-          (apply str (map #(if (= %1 \.) %2 %1) sign-row grass-row)))
-        ["................"
-         "................"
-         "..222222222222.."
-         "..233333333332.."
-         "..232232232232.."
-         "..233333333332.."
-         "..232232322232.."
-         "..233333333332.."
-         "..222222222222.."
-         ".......22......."
-         ".......22......."
-         ".......22......."
-         ".......22......."
-         "......2222......"
-         "................"
-         "................"]
-        grass))
+(def background
+  "The background's drawings, checked (see cartridj.assets):
+  {:backdrops :palettes :metatiles}. In resources/assets/tiles.edn."
+  (let [data (util/inline-edn-resource "assets/tiles.edn")
+        colors (assets/palettes (util/inline-edn-resource "assets/palettes.edn") "palettes.edn")]
+    (assoc data
+           :colors colors
+           :metatiles (assets/drawings (:metatiles data) colors "tiles.edn"))))
 
 (def box-font
   "The font on a solid background, for the text box: the letters are color
@@ -318,49 +155,40 @@
 (def tiles
   "Everything in the cartridge's graphics, with names (see
   cartridj.tileset). Tile 0 is blank, and the player's come next: the
-  importer numbers them from 1."
-  (tileset/tileset (into [[:blank  [chr/blank]]
-                          [:player (map chr/tile (:tiles art))]
-                          [:grass   grass]
-                          [:flowers flowers]
-                          [:tree    tree]
-                          [:water   water]
-                          [:path    path]
-                          [:brick   brick]
-                          [:door    door]
-                          [:floor   floor]
-                          [:stick   stick-on-floor]
-                          [:slot    items/slot]
-                          [:cursor  [cursor]]
-                          [:font    font/tiles]
-                          [:box-font box-font]
-                          [:sign    sign]]
-                   ;; each item's picture: 2x2 tiles
-                         (for [{:keys [id drawing]} items/items]
-                           [(keyword "item" (name id)) drawing]))))
+  importer numbers them from 1. Then the background's tiles, in the order
+  of tiles.edn."
+  (tileset/tileset (into (into [[:blank  [chr/blank]]
+                                [:player (map chr/tile (:tiles art))]]
+                               (for [{:keys [id pixels]} (:metatiles background)]
+                                 [id pixels]))
+                         (into [[:slot    items/slot]
+                                [:cursor  [cursor]]
+                                [:font    font/tiles]
+                                [:box-font box-font]]
+                               ;; each item's picture: 2x2 tiles
+                               (for [{:keys [id drawing]} items/items]
+                                 [(keyword "item" (name id)) drawing])))))
 
 (def metatiles
   "The 16x16 blocks that backgrounds are made of: four tiles, and which of
   the four background palettes (`palettes`) colors them. :kind says what
   it's like to walk into: :solid blocks the player, :empty doesn't."
-  {:grass   {:tiles (tileset/block tiles :grass)   :palette 0}
-   :flowers {:tiles (tileset/block tiles :flowers) :palette 0}
-   :tree    {:tiles (tileset/block tiles :tree)    :palette 1 :kind :solid}
-   :water   {:tiles (tileset/block tiles :water)   :palette 2 :kind :solid}
-   :path    {:tiles (tileset/block tiles :path)    :palette 3}
-   :brick   {:tiles (tileset/block tiles :brick)   :palette 3 :kind :solid}
-   :door    {:tiles (tileset/block tiles :door)    :palette 3 :kind :door}
-   :floor   {:tiles (tileset/block tiles :floor)   :palette 3}
-   :stick   {:tiles (tileset/block tiles :stick)   :palette 3 :kind :pickup}
-   :sign    {:tiles (tileset/block tiles :sign)    :palette 0 :kind :sign}})
+  (let [palette-numbers (into {} (map-indexed (fn [i name] [name i])) (:palettes background))]
+    (into {} (for [{:keys [id palette kind]} (:metatiles background)]
+               [id (cond-> {:tiles (tileset/block tiles id)
+                            :palette (or (palette-numbers palette)
+                                         (throw (ex-info (str "tiles.edn: " (pr-str id) " is in the palette " (pr-str palette)
+                                                              ", which isn't one of the room's: " (pr-str (:palettes background)))
+                                                         {})))}
+                     kind (assoc :kind kind))]))))
 
 ;; ---------------------------------------------------------------------------
 ;; Colors
 
 (def backgrounds
-  "The backdrop colors that A and B step through. Eight, so that
-  `color AND 7` is always a valid index."
-  (mapv palette/color [:green :light-azure :red :magenta :light-orange :azure :dark-gray :black]))
+  "The backdrop colors that B steps through. Eight, so that `color AND 7`
+  is always a valid index."
+  (mapv palette/color (:backdrops background)))
 
 (def palettes
   "Four background palettes (each three colors besides the backdrop) and
@@ -368,8 +196,5 @@
   pictures. Colors are names (see cartridj.palette/colors) or numbers."
   (palette/palettes
    {:backdrop   (first backgrounds)
-    :background [[:light-green :dark-green :light-yellow]  ; 0 grass, flowers
-                 [:dark-green :green :dark-brown]          ; 1 trees
-                 [:azure :light-azure :white]              ; 2 water
-                 [:light-orange :brown :dark-brown]]       ; 3 paths and bricks
+    :background (mapv (:colors background) (:palettes background))
     :sprites    (:palettes art)}))

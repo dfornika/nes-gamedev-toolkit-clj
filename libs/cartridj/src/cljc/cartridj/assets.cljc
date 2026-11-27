@@ -12,6 +12,12 @@
   multiple of 8, so it's a whole number of tiles. Anything else in the map
   (a name, some words, ...) is the game's, and comes through untouched.
 
+  A drawing can say it's `:over` another's (by :id): the other drawing shows
+  through wherever it's see-through. That's for a background tile with
+  something on it (a stick on the floor, a sign in the grass): a background
+  tile has no see-through of its own, the NES shows the backdrop color there.
+  They have to be the same size and the same palette.
+
     {:id :stick
      :palette :wood
      :pixels [\"................\"
@@ -63,14 +69,33 @@
         (fail where (str "pixels are . 1 2 or 3, not " (pr-str c)) {}))
       (assoc asset :colors (vec (named palette)) :width w :height h))))
 
+(defn- over
+  "`top` drawn over `under`: where a pixel of `top` is see-through, the
+  pixel of `under`."
+  [top under where]
+  (let [where (str where " (" (pr-str (:id top)) ")")]
+    (when-not (:pixels under)
+      (fail where (str "it's :over " (pr-str (:over top)) ", which isn't there") {}))
+    (when (:over under)
+      (fail where (str "it's :over " (pr-str (:id under)) ", which is itself :over another") {}))
+    (when-not (and (= (:width top) (:width under)) (= (:height top) (:height under)))
+      (fail where (str "it's not the size of " (pr-str (:id under))) {}))
+    (when-not (= (:palette top) (:palette under))
+      (fail where (str "it's :over " (pr-str (:id under)) " in another palette: " (pr-str (:palette top))
+                       ", and " (pr-str (:palette under)) ". A background tile can only have one") {}))
+    (assoc top :pixels (mapv (fn [a b] (apply str (map #(if (= %1 \.) %2 %1) a b)))
+                             (:pixels top) (:pixels under)))))
+
 (defn drawings
-  "Check a vector of drawings (see `drawing`), and that no two share an :id."
+  "Check a vector of drawings (see `drawing`), and that no two share an :id.
+  Drawings that are :over others are drawn on them."
   [assets named where]
   (let [checked (mapv #(drawing % named where) assets)
-        twice (->> (map :id checked) frequencies (filter #(> (val %) 1)) (map key) sort)]
+        twice (->> (map :id checked) frequencies (filter #(> (val %) 1)) (map key) sort)
+        by-id (into {} (map (juxt :id identity)) checked)]
     (when (seq twice)
       (fail where (str "more than one drawing is called " (str/join ", " (map pr-str twice))) {}))
-    checked))
+    (mapv (fn [d] (if (:over d) (over d (by-id (:over d)) where) d)) checked)))
 
 (defn slots
   "Give each palette in `names` (a name, or several: the same one only gets
