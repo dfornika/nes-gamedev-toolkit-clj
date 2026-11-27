@@ -12,6 +12,7 @@
             [cartridj.font :as font]
             [cartridj.palette :as palette]
             [cartridj.tileset :as tileset]
+            [poco.items :as items]
             [poco.util :as util]))
 
 ;; ---------------------------------------------------------------------------
@@ -216,19 +217,45 @@
    "1311111111311111"
    "1311111111311111"])
 
+(def cursor-look
+  "How the items screen's cursor is drawn: a sprite palette that has white
+  in it (the importer picked the palettes, so look), and which of that
+  palette's colors it is."
+  (or (first (for [[i p] (map-indexed vector (:palettes art))
+                   [c color] (map-indexed vector p)
+                   :when (= color 0x30)]
+               {:palette i :digit (inc c)}))
+      {:palette 0 :digit 3}))
+
+(def cursor
+  "One corner of the cursor, 8x8: the box round an item on the items screen
+  is four of these, flipped."
+  (let [d (str (:digit cursor-look))]
+    (chr/tile [(str d d d d d "...")
+               (str d "...." "...")
+               (str d ".......")
+               (str d ".......")
+               (str d ".......")
+               "........" "........" "........"])))
+
 (def tiles
   "Everything in the cartridge's graphics, with names (see
   cartridj.tileset). Tile 0 is blank, and the player's come next: the
   importer numbers them from 1."
-  (tileset/tileset [[:blank  [chr/blank]]
-                    [:player (map chr/tile (:tiles art))]
-                    [:grass   grass]
-                    [:flowers flowers]
-                    [:tree    tree]
-                    [:water   water]
-                    [:path    path]
-                    [:brick   brick]
-                    [:font    font/tiles]]))
+  (tileset/tileset (into [[:blank  [chr/blank]]
+                          [:player (map chr/tile (:tiles art))]
+                          [:grass   grass]
+                          [:flowers flowers]
+                          [:tree    tree]
+                          [:water   water]
+                          [:path    path]
+                          [:brick   brick]
+                          [:slot    items/slot]
+                          [:cursor  [cursor]]
+                          [:font    font/tiles]]
+                   ;; each item's picture: 2x2 tiles
+                         (for [{:keys [id drawing]} items/items]
+                           [(keyword "item" (name id)) drawing]))))
 
 (def metatiles
   "The 16x16 blocks that backgrounds are made of: four tiles, and which of

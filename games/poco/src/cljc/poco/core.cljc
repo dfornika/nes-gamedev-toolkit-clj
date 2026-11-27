@@ -4,8 +4,8 @@
   The D-pad walks (the player faces the way they're going, and their legs
   move while they do); walk off the edge of a room, through a gap, and you
   arrive in the next one. A and B change the color of the backdrop (the
-  color 'behind' everything: look at the grass). Start goes back to the
-  title.
+  color 'behind' everything: look at the grass). Start opens the items
+  screen (and closes it again); Select goes back to the title.
 
   This file is the rules. How things look is in poco.art, and where they
   are in poco.world: that's what to change most. The rest is the machinery
@@ -19,7 +19,10 @@
             [zeropage.gen :as gen]
             [zeropage.sub :as sub :refer [call]]
             [cartridj.runtime :as rt]
+            [cartridj.tileset :as tileset]
             [poco.art :as art]
+            [poco.items :as items]
+            [poco.menu :as menu]
             [poco.world :as world]))
 
 ;; ---------------------------------------------------------------------------
@@ -50,7 +53,11 @@
    [:moving :bool {:doc "Walking this frame"}]
    [:walk   :u8   {:doc "Counts frames of walking"}]
    [:pose   :u8   {:doc "What to draw: 0 standing, 1 to 4 the steps of the walk"}]
-   [:color  :u8   {:doc "Which of the backdrop colors to show"}]])
+   [:color  :u8   {:doc "Which of the backdrop colors to show"}]
+   [:items  [:bits (into {} (map-indexed (fn [i {:keys [id]}] [id i]) items/items))]
+    {:doc "The items the player has: a bit each, in the order of poco.items"}]
+   [:selected :u8 {:doc "The slot the items screen's cursor is on (0 to 7)"}]
+   [:redraw :bool {:doc "The words on the items screen need writing"}]])
 
 ;; ---------------------------------------------------------------------------
 ;; Code generators
@@ -68,10 +75,42 @@
                        [:jmp done])])
      [:label done]]))
 
+(defn- video-address [addr]
+  [[:lda [:imm (bit-shift-right addr 8)]] [:sta :ppuaddr]
+   [:lda [:imm (bit-and addr 0xFF)]] [:sta :ppuaddr]])
+
+(defn- copy-palettes
+  "Write the 16 bytes at `label` to the PPU's palette memory, from the
+  `from`th byte on (PPUADDR is where it goes)."
+  [label from]
+  [[:ldx [:imm from]]
+   (gen/do-while :not-equal
+                 [:lda label :x]
+                 [:sta :ppudata]
+                 [:inx]
+                 [:cpx [:imm 16]])])
+
+(defn world-palettes
+  "Inside draw-screen: the rooms' background palettes, and the backdrop
+  color A and B chose. (A function: each use needs labels of its own.)"
+  []
+  [(video-address 0x3F00)
+   [:lda :color] [:and [:imm 7]] [:tax]
+   [:lda :backdrops :x]
+   [:sta :ppudata]
+   (copy-palettes :world-palettes 1)])
+
+(defn item-palettes
+  "Inside draw-screen: the items screen's background palettes."
+  []
+  [(video-address 0x3F00)
+   (copy-palettes :item-palettes 0)])
+
 (defn draw-room
   "Draw the room the player is in (the screen goes blank while it does)."
   []
   (rt/draw-screen
+   (world-palettes)
    (by-room #(rt/background %))))
 
 (def start-game
@@ -81,7 +120,9 @@
    (gen/move :facing [:imm 0])
    (gen/move :moving [:imm 0])
    (gen/move :walk [:imm 0])
-   (gen/move :pose [:imm 0])])
+   (gen/move :pose [:imm 0])
+   (gen/move :items [:imm menu/starting-bits])
+   (gen/move :selected [:imm 0])])
 
 (defn- on-feet-solid
   "Run `then` if any corner of the player's feet is in something solid,
@@ -190,10 +231,111 @@
               [[:lda :color] [:and [:imm 7]] [:tay] [:lda :backdrops :y]])]))
 
 ;; ---------------------------------------------------------------------------
+;; The items screen
+
+(def draw-icons
+  "Inside draw-screen: over the empty frame of each slot whose item the
+  player has, that item's picture (two rows of two tiles)."
+  (for [[i {:keys [id]}] (map-indexed vector items/items)
+        :let [[c r] (menu/slot-block i)
+              [top-left top-right bottom-left bottom-right]
+              (tileset/block art/tiles (keyword "item" (name id)))]]
+    [[:lda :items]
+     [:and [:imm (menu/bit-of i)]]
+     (gen/when-flag :not-zero
+                    (rt/at (* 2 c) (* 2 r))
+                    [:lda [:imm top-left]] [:sta :ppudata]
+                    [:lda [:imm top-right]] [:sta :ppudata]
+                    (rt/at (* 2 c) (inc (* 2 r)))
+                    [:lda [:imm bottom-left]] [:sta :ppudata]
+                    [:lda [:imm bottom-right]] [:sta :ppudata])]))
+
+(defn- queue-line
+  "Queue a line of words for the background, from the bytes :rt/pointer
+  points to (from `offset`), written at `row`. X is the queue's end."
+  [row offset]
+  (let [address (rt/tile-address menu/text-column row)]
+    [[:lda [:imm (bit-shift-right address 8)]] [:sta :video-queue :x] [:inx]
+     [:lda [:imm (bit-and address 0xFF)]]      [:sta :video-queue :x] [:inx]
+     [:lda [:imm menu/text-columns]]           [:sta :video-queue :x] [:inx]
+     [:ldy [:imm offset]]
+     (gen/do-while :not-equal
+                   [:lda [:ind :rt/pointer] :y]
+                   [:sta :video-queue :x]
+                   [:inx]
+                   [:iny]
+                   [:cpy [:imm (+ offset menu/text-columns)]])]))
+
+(def show-item-text
+  (sub/sub
+   :show-item-text
+   "Write what the selected slot's item is called, and what it says, to
+  the background (at the next vertical blank). Each slot's words are 64
+  bytes in a table, so slot s is at s * 64: the high byte is s / 4, and
+  the low byte (s mod 4) * 64. A slot whose item the player doesn't have
+  says ?????"
+   [[:ldx :selected]
+    [:lda :bit-of :x]
+    [:and :items]
+    (gen/if-flag :not-zero
+                 [[:lda :selected] [:lsr :a] [:lsr :a] [:sta :rt/temp]
+                  [:lda :selected] [:and [:imm 3]]
+                  (repeat 6 [:asl :a])
+                  [:clc] [:adc [:imm [:lo :item-text]]] [:sta :rt/pointer]
+                  [:lda :rt/temp] [:adc [:imm [:hi :item-text]]] [:sta [:+ :rt/pointer 1]]]
+                 (gen/move16 :rt/pointer [:imm :item-unknown]))
+    [:ldx :rt/queue-end]
+    (queue-line menu/name-row 0)
+    (queue-line menu/doc-row 32)
+    [:stx :rt/queue-end]]))
+
+(def move-cursor
+  (sub/sub
+   :move-cursor
+   "The D-pad moves the cursor round the eight slots (two rows of four),
+  wrapping round at the sides. Up and down both swap the rows."
+   [(rt/when-pressed :right
+                     [[:lda :selected] [:and [:imm 3]] [:cmp [:imm 3]]
+                      (gen/if-flag :equal
+                                   [[:lda :selected] [:sec] [:sbc [:imm 3]]]
+                                   [[:lda :selected] [:clc] [:adc [:imm 1]]])
+                      [:sta :selected]
+                      (gen/move :redraw [:imm 1])])
+    (rt/when-pressed :left
+                     [[:lda :selected] [:and [:imm 3]]
+                      (gen/if-flag :zero
+                                   [[:lda :selected] [:clc] [:adc [:imm 3]]]
+                                   [[:lda :selected] [:sec] [:sbc [:imm 1]]])
+                      [:sta :selected]
+                      (gen/move :redraw [:imm 1])])
+    (for [button [:up :down]]
+      (rt/when-pressed button
+                       [[:lda :selected] [:eor [:imm 4]] [:sta :selected]
+                        (gen/move :redraw [:imm 1])]))]))
+
+(def draw-cursor
+  (sub/sub
+   :draw-cursor
+   "A box round the selected slot, drawn as four corners, and blinking."
+   (let [tile (tileset/tile art/tiles :cursor)
+         p (:palette art/cursor-look)]
+     [[:lda :rt/frame]
+      [:and [:imm 16]]
+      (gen/when-flag :zero
+                     [:ldx :selected]
+                     [:lda :slot-x :x] [:sta :rt/temp]
+                     [:lda :slot-y :x] [:sta :rt/temp2]
+                     (rt/metasprite :rt/temp :rt/temp2
+                                    [[tile 0 0 p]
+                                     [tile 8 0 (bit-or p 0x40)]
+                                     [tile 0 8 (bit-or p 0x80)]
+                                     [tile 8 8 (bit-or p 0xC0)]]))])))
+
+;; ---------------------------------------------------------------------------
 ;; States
 
 (def title
-  {:enter  [(rt/draw-screen (rt/background :title))]
+  {:enter  [(rt/draw-screen (world-palettes) (rt/background :title))]
    :update [(rt/when-pressed :start
                              [start-game
                               (rt/transition :room)])]})
@@ -205,7 +347,21 @@
    :update [(call move-player)
             (call draw-player)
             (call change-backdrop)
-            (rt/when-pressed :start (rt/transition :title))]})
+            (rt/when-pressed :start (rt/transition :items))
+            (rt/when-pressed :select (rt/transition :title))]})
+
+(def items-screen
+  "The items screen. Start or B goes back to the room."
+  {:enter  [(rt/draw-screen (item-palettes) (rt/background :items) draw-icons)
+            (gen/move :redraw [:imm 1])]
+   :update [(call move-cursor)
+            [:lda :redraw]
+            (gen/when-flag :not-zero
+                           (call show-item-text)
+                           (gen/move :redraw [:imm 0]))
+            (call draw-cursor)
+            (rt/when-pressed :start (rt/transition :room))
+            (rt/when-pressed :b (rt/transition :room))]})
 
 ;; ---------------------------------------------------------------------------
 ;; The debugger's overlay
@@ -228,9 +384,19 @@
     :variables variables
     :tiles (:tiles art/tiles)
     :palettes art/palettes
-    :screens world/screens
-    :tables {:backdrops art/backgrounds}
+    :screens (assoc world/screens :items menu/screen-data)
+    :tables {:backdrops art/backgrounds
+             :world-palettes (vec (take 16 art/palettes))
+             :item-palettes menu/palettes
+             :bit-of menu/bit-of
+             :slot-x (mapv #(first (menu/slot-pixels %)) (range items/slots))
+             :slot-y (mapv #(second (menu/slot-pixels %)) (range items/slots))
+             :item-text menu/text-table
+             :item-unknown menu/unknown}
     :overlays overlays
+    ;; the pictures of every step of every direction take a lot of room
+    :prg-size 32768
     :initial :title
     :states [[:title title]
-             [:room room]]}))
+             [:room room]
+             [:items items-screen]]}))
