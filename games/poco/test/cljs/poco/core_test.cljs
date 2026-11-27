@@ -5,6 +5,7 @@
   (:require [cljs.test :refer [deftest is testing]]
             [poco.art :as art]
             [poco.menu :as menu]
+            [poco.talk :as talk]
             [poco.core :as poco]
             [poco.world :as world]
             [zeropage.harness :as harness]))
@@ -15,6 +16,7 @@
 (defn- room [m] (nth world/room-names (harness/peek-at m :room)))
 (defn- facing [m] (nth art/directions (harness/peek-at m :facing)))
 (defn- pose [m] (harness/peek-at m :pose))
+(defn- state [m] (get {0 :title 1 :room 2 :items 3 :talk} (harness/peek-at m :rt/state)))
 
 (defn- walk!
   "Hold `button` for `n` frames, then let go."
@@ -106,14 +108,14 @@
                    (walk! m :right 20)
                    (- (first (where m)) (:x world/start)))
         [dx dy] (let [m (game) [x y] (where m)]
-                  (harness/hold! m :right :down)
+                  (harness/hold! m :right :up)
                   (harness/frames! m 20)
                   (harness/hold! m)
                   (harness/frame! m)
                   (let [[x2 y2] (where m)] [(- x2 x) (- y2 y)]))]
     (is (= 30 straight))
     (is (<= 20 dx 22) "slower along each axis")
-    (is (<= 20 dy 22))
+    (is (<= 20 (- dy) 22))
     (is (< (+ (* dx dx) (* dy dy)) (* 1.1 straight straight)) "about as far as a straight line")))
 
 (deftest the-house-has-a-door
@@ -147,10 +149,38 @@
     (walk! m :up 66)
     (harness/frames! m 4)
     (is (= 1 (bit-and 1 (harness/peek-at m :items))) "the stick is the player's")
+    (is (= :talk (state m)) "and the game says so")
+    (is (= (talk/number [:found :stick]) (harness/peek-at m :message)))
+    (tap! m :a)
+    (harness/frames! m 3)
+    (is (= :room (state m)) "A goes back to the game")
     (testing "it stays gone"
       (walk! m :down 20)
       (walk! m :up 20)
       (is (= 1 (bit-and 1 (harness/peek-at m :items)))))))
+
+(deftest a-sign-can-be-read
+  (let [m (game)]
+    (tap! m :a)
+    (harness/frames! m 3)
+    (is (= :room (state m)) "A with nothing in front of you does nothing")
+    (walk! m :right 6)
+    (walk! m :down 40)
+    (is (= :down (facing m)))
+    (tap! m :a)
+    (harness/frames! m 3)
+    (is (= :talk (state m)) "facing the sign, A reads it")
+    (is (= (talk/number [:sign :home]) (harness/peek-at m :message)))
+    (let [at (where m)]
+      (walk! m :up 10)
+      (is (= at (where m)) "no walking while reading"))
+    (tap! m :b)
+    (harness/frames! m 3)
+    (is (= :room (state m)))
+    (is (= :home (room m)))))
+
+(deftest every-message-fits
+  (is (= (* 64 (count talk/messages)) (count talk/table))))
 
 (deftest the-world-is-consistent
   (testing "every exit goes somewhere, and back"
@@ -163,7 +193,6 @@
       (doseq [[name {:keys [to]}] doors]
         (is (= name (get-in doors [to :to])) (str name " -> " to))))))
 
-(defn- state [m] (get {0 :title 1 :room 2 :items} (harness/peek-at m :rt/state)))
 (defn- selected [m] (harness/peek-at m :selected))
 
 (defn- open-items [m]

@@ -3,8 +3,8 @@
 
   The D-pad walks (the player faces the way they're going, and their legs
   move while they do); walk off the edge of a room, through a gap, and you
-  arrive in the next one. A and B change the color of the backdrop (the
-  color 'behind' everything: look at the grass). Start opens the items
+  arrive in the next one. B changes the color of the backdrop (the
+  color 'behind' everything: look at the grass). A reads a sign (face it first). Start opens the items
   screen (and closes it again); Select goes back to the title.
 
   This file is the rules. How things look is in poco.art, and where they
@@ -24,6 +24,7 @@
             [poco.art :as art]
             [poco.items :as items]
             [poco.menu :as menu]
+            [poco.talk :as talk]
             [poco.world :as world]))
 
 ;; ---------------------------------------------------------------------------
@@ -65,6 +66,7 @@
    [:color  :u8   {:doc "Which of the backdrop colors to show"}]
    [:items  [:bits (into {} (map-indexed (fn [i {:keys [id]}] [id i]) items/items))]
     {:doc "The items the player has: a bit each, in the order of poco.items"}]
+   [:message :u8 {:doc "Which of poco.talk's messages to show"}]
    [:selected :u8 {:doc "The slot the items screen's cursor is on (0 to 7)"}]
    [:redraw :bool {:doc "The words on the items screen need writing"}]])
 
@@ -166,7 +168,7 @@
         {:keys [left top right bottom]} feet]
     [(for [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
        [(rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
-        (rt/on-kinds [:solid] [[:jmp hit]])])
+        (rt/on-kinds [:solid :sign] [[:jmp hit]])])
      else
      [:jmp done]
      [:label hit]
@@ -232,7 +234,8 @@
   (sub/sub
    :pick-up
    "If the player's feet are on an item lying about, take it: it's theirs
-  (a bit of `items`), and the room is drawn again without it. An item
+  (a bit of `items`), the game says so, and when that's read the room is
+  drawn again without it. An item
   that's been taken is still there as far as the map goes, so it only
   counts the first time."
    [(rt/probe (gen/whole :player/x) (quot (+ (:left feet) (:right feet)) 2)
@@ -248,8 +251,38 @@
                           [:lda :items]
                           [:ora [:imm (item-bit item)]]
                           [:sta :items]
-                          (rt/restart))]
+                          (gen/move :message [:imm (talk/number [:found item])])
+                          (rt/transition :talk))]
           []))))]))
+
+(def read-sign
+  (sub/sub
+   :read-sign
+   "A reads a sign: if the player faces one, close enough, the game says
+  what it says (the :sign of the room, in poco.world)."
+   (let [done (asm/genlabel "read")
+         {:keys [left right top bottom]} feet
+         middle (quot (+ left right) 2)
+         ahead {:down [middle (+ bottom 4)] :up [middle (- top 4)]
+                :left [(- left 4) (quot (+ top bottom) 2)] :right [(+ right 4) (quot (+ top bottom) 2)]}]
+     (rt/when-pressed
+      :a
+      [(for [[i direction] (map-indexed vector art/directions)
+             :let [[dx dy] (ahead direction)]]
+         [[:lda :facing]
+          [:cmp [:imm i]]
+          (gen/when-flag :equal
+                         (rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
+                         (rt/on-kinds
+                          [:sign]
+                          (by-room
+                           (fn [name]
+                             (if (:sign (get (into {} world/rooms) name))
+                               [(gen/move :message [:imm (talk/number [:sign name])])
+                                (rt/transition :talk)]
+                               []))))
+                         [:jmp done])])
+       [:label done]]))))
 
 (def move-player
   (sub/sub
@@ -306,11 +339,10 @@
 (def change-backdrop
   (sub/sub
    :change-backdrop
-   "A steps to the next backdrop color, B to the one before. The PPU can
-  only be changed in vertical blank, so this queues a write to the first
-  color of its palette memory ($3F00)."
-   [(rt/when-pressed :a [:inc :color])
-    (rt/when-pressed :b [:dec :color])
+   "B steps to the next backdrop color. The PPU can only be changed in
+  vertical blank, so this queues a write to the first color of its palette
+  memory ($3F00)."
+   [(rt/when-pressed :b [:inc :color])
     (rt/queue 0x3F00
               [[:lda :color] [:and [:imm 7]] [:tay] [:lda :backdrops :y]])]))
 
@@ -416,6 +448,64 @@
                                      [tile 8 8 (bit-or p 0xC0)]]))])))
 
 ;; ---------------------------------------------------------------------------
+;; The text box
+
+(defn- blank-row
+  "Inside draw-screen: a row of the box with nothing in it."
+  [row]
+  [(rt/at 0 row)
+   [:lda [:imm (tileset/tile art/tiles :box-font)]]
+   [:ldx [:imm 32]]
+   (gen/do-while :not-equal [:sta :ppudata] [:dex])])
+
+(defn- text-row
+  "Inside draw-screen: a row of the box, from the 32 bytes :rt/pointer
+  points to (from `offset`)."
+  [row offset]
+  [(rt/at 0 row)
+   [:ldy [:imm offset]]
+   (gen/do-while :not-equal
+                 [:lda [:ind :rt/pointer] :y]
+                 [:sta :ppudata]
+                 [:iny]
+                 [:cpy [:imm (+ offset 32)]])])
+
+(defn- draw-box
+  "Inside draw-screen: the box, four rows of tiles from `row` down, and the
+  last palette of the screen's attribute bytes (`attribute`, 8 of them,
+  for four rows of tiles) so the box is all in palette 3."
+  [row attribute]
+  [(blank-row row)
+   (text-row (+ row 1) 0)
+   (text-row (+ row 2) 32)
+   (blank-row (+ row 3))
+   (video-address attribute)
+   [:lda [:imm 0xFF]]
+   [:ldx [:imm 8]]
+   (gen/do-while :not-equal [:sta :ppudata] [:dex])])
+
+(def box-enter
+  "Show the box over the room, at the bottom, or at the top if that's where
+  the player is. Message number `message` is 64 bytes at message * 64 in
+  the table."
+  (let [at-top (asm/genlabel "boxtop")
+        done (asm/genlabel "boxed")]
+    (rt/draw-screen
+     [[:lda :message] [:lsr :a] [:lsr :a] [:sta :rt/temp]
+      [:lda :message] [:and [:imm 3]]
+      (repeat 6 [:asl :a])
+      [:clc] [:adc [:imm [:lo :messages]]] [:sta :rt/pointer]
+      [:lda :rt/temp] [:adc [:imm [:hi :messages]]] [:sta [:+ :rt/pointer 1]]
+      [:lda (gen/whole :player/y)]
+      [:cmp [:imm 112]]
+      [:bcs at-top]
+      (draw-box 24 0x23F0)
+      [:jmp done]
+      [:label at-top]
+      (draw-box 0 0x23C0)
+      [:label done]])))
+
+;; ---------------------------------------------------------------------------
 ;; States
 
 (def title
@@ -431,10 +521,19 @@
    :update [(call move-player)
             (call enter-door)
             (call pick-up)
+            (call read-sign)
             (call draw-player)
             (call change-backdrop)
             (rt/when-pressed :start (rt/transition :items))
             (rt/when-pressed :select (rt/transition :title))]})
+
+(def talk
+  "Reading a message. A or B goes back to the room (which draws itself
+  again, over the box). The player stands where they were."
+  {:enter  box-enter
+   :update [(call draw-player)
+            (rt/when-pressed :a (rt/transition :room))
+            (rt/when-pressed :b (rt/transition :room))]})
 
 (def items-screen
   "The items screen. Start or B goes back to the room."
@@ -478,11 +577,13 @@
              :slot-x (mapv #(first (menu/slot-pixels %)) (range items/slots))
              :slot-y (mapv #(second (menu/slot-pixels %)) (range items/slots))
              :item-text menu/text-table
-             :item-unknown menu/unknown}
+             :item-unknown menu/unknown
+             :messages talk/table}
     :overlays overlays
     ;; the pictures of every step of every direction take a lot of room
     :prg-size 32768
     :initial :title
     :states [[:title title]
              [:room room]
-             [:items items-screen]]}))
+             [:items items-screen]
+             [:talk talk]]}))

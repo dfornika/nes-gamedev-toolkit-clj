@@ -262,6 +262,38 @@
           (apply str (map #(if (= %1 \.) %2 %1) item-row floor-row)))
         items/stick floor))
 
+(def sign
+  "A sign, standing in the grass."
+  (mapv (fn [sign-row grass-row]
+          (apply str (map #(if (= %1 \.) %2 %1) sign-row grass-row)))
+        ["................"
+         "................"
+         "..222222222222.."
+         "..233333333332.."
+         "..232232232232.."
+         "..233333333332.."
+         "..232232322232.."
+         "..233333333332.."
+         "..222222222222.."
+         ".......22......."
+         ".......22......."
+         ".......22......."
+         ".......22......."
+         "......2222......"
+         "................"
+         "................"]
+        grass))
+
+(def box-font
+  "The font on a solid background, for the text box: the letters are color
+  1 and the background color 3, so they stand out in the box whatever's
+  behind it (a tile of the world's has no see-through: that's the backdrop
+  color)."
+  (mapv (fn [glyph]
+          (into (vec (repeat 8 0xFF))                                  ; plane 0: all on
+                (map #(bit-xor % 0xFF) (take 8 glyph))))              ; plane 1: off for the letters
+        font/tiles))
+
 (def cursor-look
   "How the items screen's cursor is drawn: a sprite palette that has white
   in it (the importer picked the palettes, so look), and which of that
@@ -300,7 +332,9 @@
                           [:stick   stick-on-floor]
                           [:slot    items/slot]
                           [:cursor  [cursor]]
-                          [:font    font/tiles]]
+                          [:font    font/tiles]
+                          [:box-font box-font]
+                          [:sign    sign]]
                    ;; each item's picture: 2x2 tiles
                          (for [{:keys [id drawing]} items/items]
                            [(keyword "item" (name id)) drawing]))))
@@ -317,7 +351,8 @@
    :brick   {:tiles (tileset/block tiles :brick)   :palette 3 :kind :solid}
    :door    {:tiles (tileset/block tiles :door)    :palette 3 :kind :door}
    :floor   {:tiles (tileset/block tiles :floor)   :palette 3}
-   :stick   {:tiles (tileset/block tiles :stick)   :palette 3 :kind :pickup}})
+   :stick   {:tiles (tileset/block tiles :stick)   :palette 3 :kind :pickup}
+   :sign    {:tiles (tileset/block tiles :sign)    :palette 0 :kind :sign}})
 
 ;; ---------------------------------------------------------------------------
 ;; Colors
