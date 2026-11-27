@@ -25,7 +25,7 @@ Change something, save, run that line again: a new game, in under a second.
 |------|--------------|
 | `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick, `d` door, `_` wooden floor, `s` a stick to pick up, `S` a sign). Add a room, add a door to it. |
 | `src/cljc/poco/art.cljc` | **How things look**: the background tiles (drawn with `. 1 2 3`), the colors, and which picture is which step of the walk (`poses`). |
-| `src/cljc/poco/items.cljc` | **The items**: names, what they say, their pictures (drawn with `. 1 2 3` for now) and which the player starts with. |
+| `resources/assets/items.edn`, `palettes.edn` | **The items**, as data: each one's drawing (text, a letter a pixel), palette (by name), words, and whether you start with it. `src/cljc/poco/items.cljc` reads and checks them (`cartridj.assets`). |
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
 | `src/cljc/poco/talk.cljc` | **What the game says** in its text box: finding an item, and signs (a room's `:sign` in `world.cljc`). |
 | `src/cljc/poco/core.cljc` | **The rules**: walking speed (`walk-speed`), how fast the legs move (`frames-per-step`), the player's feet. |

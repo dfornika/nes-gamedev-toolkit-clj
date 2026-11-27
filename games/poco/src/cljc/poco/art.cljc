@@ -260,7 +260,7 @@
   floor's, palette 3, so it can lie on it.)"
   (mapv (fn [item-row floor-row]
           (apply str (map #(if (= %1 \.) %2 %1) item-row floor-row)))
-        items/stick floor))
+        (items/drawing :stick) floor))
 
 (def sign
   "A sign, standing in the grass."
