@@ -9,8 +9,8 @@
 
   The items are numbered in the order they're listed (there's room for
   eight): that's their place on the items screen, and the bit that says
-  you have it. Nothing gives the player items yet: `starting` says which
-  they begin with. In the debugger, set the variable `items` to give or take
+  you have it. `starting` says which they begin with, and the rest are
+  found lying about (see :pickup in poco.world). In the debugger, set the variable `items` to give or take
   them (bit 0 is the first).
 
   The drawings here are placeholders: they get replaced by real art.")
@@ -135,6 +135,6 @@
 
 (def starting
   "The items the player starts the game with."
-  #{:stick :bat :pizza :firecracker})
+  #{:bat :pizza :firecracker})
 
 (def slots 8)

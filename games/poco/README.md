@@ -23,7 +23,7 @@ Change something, save, run that line again: a new game, in under a second.
 
 | File | What's in it |
 |------|--------------|
-| `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick, `d` door, `_` wooden floor). Add a room, add a door to it. |
+| `src/cljc/poco/world.cljc` | **The rooms**, drawn with letters (`T` tree, `~` water, `=` path, `#` brick, `d` door, `_` wooden floor, `s` a stick to pick up). Add a room, add a door to it. |
 | `src/cljc/poco/art.cljc` | **How things look**: the background tiles (drawn with `. 1 2 3`), the colors, and which picture is which step of the walk (`poses`). |
 | `src/cljc/poco/items.cljc` | **The items**: names, what they say, their pictures (drawn with `. 1 2 3` for now) and which the player starts with. |
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
@@ -51,7 +51,7 @@ side-on art only needs to be made facing right.
 ## In the game
 
 D-pad: walk. A / B: change the backdrop color. Start: the items screen (D-pad moves the cursor; Start or B goes back). Select: back to the title.
-Walk through a gap in the trees into the next room, or into the brick house's door to go inside (and out again through the door at the bottom). Walking diagonally is no faster than straight: both directions are slowed to 0.7071 (1 / the square root of 2) of the speed.
+Walk through a gap in the trees into the next room, or into the brick house's door to go inside (and out again through the door at the bottom). There's a stick lying on the floor inside: walk over it to pick it up (then look in the items screen). You start without it; `starting` in `poco.items` says what you begin with. Walking diagonally is no faster than straight: both directions are slowed to 0.7071 (1 / the square root of 2) of the speed.
 
 ## Looking inside
 

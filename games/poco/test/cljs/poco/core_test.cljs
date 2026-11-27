@@ -132,6 +132,26 @@
       (is (= :down (facing m)))
       (is (= [72 76] (where m)) "in front of the door"))))
 
+(defn- inside-the-house! [m]
+  (walk! m :right 32)
+  (walk-out! m :up 80)
+  (harness/frames! m 3)
+  m)
+
+(deftest an-item-lying-about-can-be-picked-up
+  (let [m (inside-the-house! (game))
+        stick-bit 1]
+    (is (zero? (bit-and stick-bit (harness/peek-at m :items))) "no stick yet")
+    ;; from (120, 176) walk up and right, to stand on it at (176, 96)
+    (walk! m :right 38)
+    (walk! m :up 66)
+    (harness/frames! m 4)
+    (is (= 1 (bit-and 1 (harness/peek-at m :items))) "the stick is the player's")
+    (testing "it stays gone"
+      (walk! m :down 20)
+      (walk! m :up 20)
+      (is (= 1 (bit-and 1 (harness/peek-at m :items)))))))
+
 (deftest the-world-is-consistent
   (testing "every exit goes somewhere, and back"
     (let [exits (into {} (for [[name {:keys [exits]}] world/rooms] [name exits]))
@@ -159,7 +179,7 @@
 
 (deftest the-player-starts-with-the-starting-items
   (let [m (game)]
-    (is (= 2r1111 (harness/peek-at m :items)))))
+    (is (= 2r1110 (harness/peek-at m :items)) "all but the stick")))
 
 (deftest start-opens-the-items-screen-and-closes-it-again
   (let [m (game)
@@ -210,7 +230,8 @@
   (menu/line words))
 
 (deftest the-words-are-for-the-selected-item
-  (let [m (open-items (game))]
+  (let [m (doto (game) (harness/poke-at! :items 2r1111))
+        _ (open-items m)]
     (testing "the first item's name and what it says, in the two rows"
       (is (= (spelled "STICK") (:tiles (queued-line m 0))))
       (is (= (spelled "FOR POKING THINGS.") (:tiles (queued-line m 31)))))
