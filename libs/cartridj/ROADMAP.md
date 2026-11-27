@@ -49,7 +49,7 @@ An asset is a map. Something like:
   makes shadow-cljs recompile, and fix that if not, so edit-and-see keeps
   working.
 
-Order of work: items first (the simplest: one drawing and a palette), then
+Order of work: items first (the simplest: one drawing and a palette; **done**: `cartridj.assets`, and poco's `assets/items.edn` and `palettes.edn`), then
 background tiles and metatiles, then sprites and poses. Each step moves one
 kind of asset out of Clojure source, and the game builds the same ROM before
 and after (compare the bytes).

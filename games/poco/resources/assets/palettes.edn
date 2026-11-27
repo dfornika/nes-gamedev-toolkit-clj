@@ -1,0 +1,6 @@
+;; Named palettes: the three colors that the digits 1 2 3 of a drawing stand
+;; for (cartridj.assets). Colors are names from cartridj.palette/colors, or numbers.
+{:ui          [:white :light-gray :gray]
+ :wood        [:light-orange :brown :dark-brown]
+ :pizza       [:light-yellow :red :light-orange]
+ :firecracker [:white :red :dark-red]}
