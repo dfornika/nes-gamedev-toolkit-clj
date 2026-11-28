@@ -701,7 +701,7 @@
      [:cpx [:imm 32]])
 
    (gen/move :rt/mask [:imm 0x1E])      ; show background and sprites
-   (gen/move :rt/ctrl [:imm :ctrl-base]) ; NMI on, and which pattern tables (see `program`)
+   [:lda [:imm :ctrl-base]] [:sta :rt/ctrl] ; NMI on, and which pattern tables (see `program`)
    ;; In no state yet, with a transition to the initial state waiting: so
    ;; the first frame begins by running its entry action.
    (gen/move :rt/state [:imm 0xFF])
@@ -917,10 +917,13 @@
         state-sub (fn [phase [state-name state]]
                     (sub/sub (keyword (str (clojure.core/name state-name) "-" (clojure.core/name phase)))
                              (get state phase [])))
-        _ (when (and sprite-tiles (> (count tiles) 256))
-            (throw (ex-info (str "The background's :tiles are " (count tiles) "; with :sprite-tiles there's room for 256") {})))
-        _ (when (and sprite-tiles (> (count sprite-tiles) 256))
-            (throw (ex-info (str ":sprite-tiles are " (count sprite-tiles) ": 256 at most") {})))
+        ;; (no `and` here: its expansion uses up numbers that label names are made
+        ;; from, and the games' prebuilt files in nes-cljs name their labels with them)
+        _ (when sprite-tiles
+            (when (> (count tiles) 256)
+              (throw (ex-info (str "The background's :tiles are " (count tiles) "; with :sprite-tiles there's room for 256") {})))
+            (when (> (count sprite-tiles) 256)
+              (throw (ex-info (str ":sprite-tiles are " (count sprite-tiles) ": 256 at most") {}))))
         levels? (boolean (seq levels))
         _ (when (and levels? (not metatiles))
             (throw (ex-info ":levels needs :metatiles too: the map the levels were made from" {})))]
