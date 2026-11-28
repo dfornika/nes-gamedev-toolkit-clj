@@ -169,6 +169,63 @@
     (doseq [[room {:keys [npcs enemies]}] world/rooms]
       (is (<= (count (distinct (mapcat #(art/guests-of (:kind %)) (concat npcs enemies)))) 1) (str room)))))
 
+(defn- in-the-park!
+  "A game with the stick, in the park next to the teenager: `gap` pixels
+  from his feet, on his left, facing `direction`."
+  [gap direction]
+  (let [m (doto (game) (harness/poke-at! :items 2r1111))
+        {:keys [x y]} (first (:enemies (get (into {} world/rooms) :park)))]
+    (walk-out! m :right 300)
+    (harness/frames! m 3)
+    (harness/poke-at! m (inc (addr m :player/x)) (- (+ x 3) gap 13))   ; feet's right edge, 12 in, is `gap` short of his
+    (harness/poke-at! m (inc (addr m :player/y)) y)
+    (harness/poke-at! m :facing (.indexOf art/directions direction))
+    m))
+
+(defn- teenager-hp [m] (harness/peek-at m (addr m :enemy-hp)))
+
+(deftest the-stick-hits-the-teenager
+  (testing "close enough, facing him: one hit a swing"
+    (let [m (in-the-park! 4 :right)]
+      (is (= 3 (teenager-hp m)))
+      (tap! m :b)
+      (harness/frames! m 16)
+      (is (= 2 (teenager-hp m)) "one hit, not one for every frame")
+      (harness/frames! m 20)
+      (tap! m :b)
+      (harness/frames! m 16)
+      (is (= 1 (teenager-hp m)))))
+  (testing "too far away"
+    (let [m (in-the-park! 20 :right)]
+      (tap! m :b)
+      (harness/frames! m 16)
+      (is (= 3 (teenager-hp m)))))
+  (testing "facing the other way"
+    (let [m (in-the-park! 4 :left)]
+      (tap! m :b)
+      (harness/frames! m 16)
+      (is (= 3 (teenager-hp m)))))
+  (testing "three hits and he's gone: not drawn, and not in the way"
+    (let [m (in-the-park! 4 :right)
+          {:keys [x]} (first (:enemies (get (into {} world/rooms) :park)))
+          oam-y (fn [m] (harness/peek-at m (+ (addr m :oam) (* 4 (count (art/pose-pieces :down 0))))))]
+      (is (not= 0xFF (oam-y m)) "he's drawn")
+      (dotimes [_ 3]
+        (tap! m :b)
+        (harness/frames! m 24))
+      (is (zero? (teenager-hp m)))
+      (harness/frames! m 25)
+      (is (= 0xFF (oam-y m)) "his sprites are hidden")
+      (walk! m :right 40)
+      (is (> (first (where m)) (+ x 10)) "the player walks through where he stood"))))
+
+(deftest the-swing-overlay-shows-the-box
+  (let [draw (:draw (second poco/overlays))
+        player {:x 100 :y 50}]
+    (is (nil? (draw {:rt.state :room :player player :facing :right :swing 0})))
+    (let [[[_ {:keys [x y w h]}]] (draw {:rt.state :room :player player :facing :right :swing 5})]
+      (is (= [(+ 100 13) (+ 50 26) poco/swing-reach 6] [x y w h])))))
+
 (deftest the-dad-can-be-talked-to
   (let [m (inside-the-house! (game))
         {:keys [x y]} (first (:npcs (get (into {} world/rooms) :house)))

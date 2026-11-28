@@ -86,7 +86,8 @@
 
    [:park
     {:exits {:left :home, :up :woods}
-     :enemies [{:kind :teenager, :x 176, :y 80}]
+     ;; `hp`: how many hits it takes
+     :enemies [{:kind :teenager, :x 176, :y 80, :hp 3}]
      :rows ["TTTTTTT..TTTTTTT"
             "T......==......T"
             "T.f....==....f.T"
