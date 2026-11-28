@@ -112,3 +112,27 @@
       (is (= [[0x30] [0x27 0x16 0x0F]] (:palettes art)))
       (is (= [1 0] (map #(nth % 3) (:sprites (first (:frames art)))))
           "tiles go to the first palette that has their colors"))))
+
+(deftest guests-get-palettes-of-their-own-only-for-what-the-shared-ones-lack
+  (let [dir (temp-dir)]
+    ;; the hero's one tile uses a b c, so that's the shared palette
+    (picture! dir "hero-01.png" colors ["aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.."])
+    ;; the imp's first tile uses a and b (fits the shared palette), its second c and d (doesn't)
+    (picture! dir "imp-01.png" colors (vec (repeat 8 "aabb....ccdd....")))
+    (let [art (sprites/build (mapv #(sprites/read-frame (io/file dir %)) ["hero-01.png" "imp-01.png"])
+                             {:shared #{:hero} :first-tile 1})
+          imp (second (:frames art))]
+      (is (= [[0x16 0x27 0x30]] (map #(vec (sort %)) (:palettes art))) "just the hero's")
+      (is (= {:imp [[0x0F 0x30]]} (update-vals (:guests art) #(mapv (comp vec (partial sort)) %))) "only c and d, which the imp needs besides")
+      (is (= [:hero :imp] (map :character (:frames art))))
+      (is (= [0 1] (map #(nth % 3) (:sprites imp))) "the first tile uses the shared palette (0), the second the imp's (slot 1)"))))
+
+(deftest a-guest-that-doesnt-fit-in-the-slots-left-is-an-error
+  (let [dir (temp-dir)]
+    (picture! dir "hero-01.png" colors ["aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.." "aabbcc.."])
+    (picture! dir "imp-01.png" colors (vec (repeat 8 "ddaa....")))
+    (let [frames (mapv #(sprites/read-frame (io/file dir %)) ["hero-01.png" "imp-01.png"])
+          error (try (sprites/build frames {:shared #{:hero} :max-palettes 1}) nil
+                     (catch clojure.lang.ExceptionInfo e (ex-message e)))]
+      (is (some? error))
+      (is (str/includes? error "imp needs 1 sprite palette(s) of its own")))))
