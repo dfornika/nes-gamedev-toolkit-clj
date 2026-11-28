@@ -7,7 +7,7 @@ characters, teenagers as the enemies, and rooms that switch to a platformer
 
 Done: walking (with a walk cycle and facing), four rooms, a house you can go
 inside, the items screen, an item to pick up (the stick), text boxes and a
-sign. The toolkit side of the plan is in `libs/cartridj/ROADMAP.md`.
+sign, and swinging the stick (B). The toolkit side of the plan is in `libs/cartridj/ROADMAP.md`.
 
 ## Now: the neighborhood
 
@@ -29,9 +29,10 @@ Each of these uses what's there:
 1. **NPCs to talk to.** Standing characters (sprites, drawn over the room)
    that say something when faced and A is pressed: the text box and the
    `:sign` machinery, with the character's position kept in the room's data.
-2. **Using an item.** B (or A) swings the equipped item: the items screen
-   gets an "equipped" marker, and the stick and bat hit what's in front
-   (a probe, like reading a sign). The pizza restores a heart; the firecracker
+2. **Using an item.** B swings the stick already (the swing is two pictures per
+   direction: `poses.edn`), but it doesn't hit anything yet: that wants
+   something to hit, and a probe in front of the player, like reading a sign.
+   Then the items screen gets an "equipped" marker, and the bat does the same. The pizza restores a heart; the firecracker
    goes bang.
 3. **Hearts.** A health variable, shown at the top of the screen, and a way to
    take damage. This needs a status bar: sprites for the hearts to start with.

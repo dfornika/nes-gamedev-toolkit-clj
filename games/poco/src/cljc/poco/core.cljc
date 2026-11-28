@@ -3,9 +3,9 @@
 
   The D-pad walks (the player faces the way they're going, and their legs
   move while they do); walk off the edge of a room, through a gap, and you
-  arrive in the next one. B changes the color of the backdrop (the
-  color 'behind' everything: look at the grass). A reads a sign (face it first). Start opens the items
-  screen (and closes it again); Select goes back to the title.
+  arrive in the next one. B swings the stick (if the player has it). A reads
+  a sign (face it first). Start opens the items screen (and closes it
+  again); Select goes back to the title.
 
   This file is the rules. How things look is in poco.art, and where they
   are in poco.world: that's what to change most. The rest is the machinery
@@ -41,6 +41,11 @@
   Scaling both by 0.7071 makes the diagonal as long as a straight step."
   (* walk-speed 0.7071))
 
+(def swing-frames
+  "How long a swing of the stick lasts, in frames: half of it in each of
+  the swing's two pictures (see sprites/player/poses.edn)."
+  12)
+
 (def frames-per-step
   "How many frames of each step of the walking, as a power of two (the
   number of times to halve the frame count): 3 is 8 frames, so a step
@@ -62,8 +67,8 @@
    [:moving :bool {:doc "Walking this frame"}]
    [:speed  :u8.8 {:doc "Pixels to walk this frame: less when going diagonally"}]
    [:walk   :u8   {:doc "Counts frames of walking"}]
-   [:pose   :u8   {:doc "What to draw: 0 standing, 1 to 4 the steps of the walk"}]
-   [:color  :u8   {:doc "Which of the backdrop colors to show"}]
+   [:pose   :u8   {:doc "What to draw: 0 standing, 1 to 4 the steps of the walk, 5 and 6 the swing"}]
+   [:swing  :u8   {:doc "Frames left of swinging the stick (0: not swinging)"}]
    [:items  [:bits (into {} (map-indexed (fn [i {:keys [id]}] [id i]) items/items))]
     {:doc "The items the player has: a bit each, in the order of poco.items"}]
    [:message :u8 {:doc "Which of poco.talk's messages to show"}]
@@ -103,11 +108,10 @@
 
 (defn world-palettes
   "Inside draw-screen: the rooms' background palettes, and the backdrop
-  color A and B chose. (A function: each use needs labels of its own.)"
+  color. (A function: each use needs labels of its own.)"
   []
   [(video-address 0x3F00)
-   [:lda :color] [:and [:imm 7]] [:tax]
-   [:lda :backdrops :x]
+   [:lda [:imm art/backdrop]]
    [:sta :ppudata]
    (copy-palettes :world-palettes 1)])
 
@@ -156,6 +160,7 @@
    (gen/move :moving [:imm 0])
    (gen/move :walk [:imm 0])
    (gen/move :pose [:imm 0])
+   (gen/move :swing [:imm 0])
    (gen/move :items [:imm menu/starting-bits])
    (gen/move :selected [:imm 0])])
 
@@ -291,7 +296,10 @@
   anything that's gone into something solid. x and y are done separately,
   so the player slides along a wall."
    [(gen/move :moving [:imm 0])
-    ;; diagonal (a left or right held, and an up or down too): the slower speed
+    [:lda :swing]
+    (gen/when-flag
+     :zero
+     ;; diagonal (a left or right held, and an up or down too): the slower speed
     (gen/move16 :speed [:imm (gen/fixed walk-speed)])
     [:lda :pad/held]
     [:and [:imm (bit-or (hw/buttons :left) (hw/buttons :right))]]
@@ -314,7 +322,33 @@
                   [:clc] [:adc [:imm 1]]
                   [:sta :pose]]
                  [(gen/move :walk [:imm 0])
-                  (gen/move :pose [:imm 0])])]))
+                  (gen/move :pose [:imm 0])]))]))
+
+(def swing-stick
+  (sub/sub
+   :swing-stick
+   "B swings the stick, if the player has it: they stand still for
+  `swing-frames`, drawn in the swing's two pictures, one after the other
+  (poses 5 and 6)."
+   [[:lda :swing]
+    (gen/if-flag
+     :not-zero
+     [[:dec :swing]
+      [:lda :swing]
+      (gen/if-flag :zero
+                   (gen/move :pose [:imm 0])
+                   [[:cmp [:imm (quot swing-frames 2)]]
+                    (gen/if-flag :carry
+                                 (gen/move :pose [:imm 5])
+                                 (gen/move :pose [:imm 6]))])]
+     (rt/when-pressed
+      :b
+      [[:lda :items]
+       [:and [:imm (item-bit :stick)]]
+       (gen/when-flag :not-zero
+                      (gen/move :swing [:imm swing-frames])
+                      (gen/move :walk [:imm 0])
+                      (gen/move :pose [:imm 5]))]))]))
 
 (def draw-player
   (sub/sub
@@ -327,7 +361,7 @@
         [[:lda :facing]
          [:cmp [:imm i]]
          (gen/when-flag :equal
-                        (for [pose (range 5)]
+                        (for [pose (range art/steps)]
                           [[:lda :pose]
                            [:cmp [:imm pose]]
                            (gen/when-flag :equal
@@ -335,16 +369,6 @@
                                                          (art/pose-pieces direction pose))
                                           [:jmp done])]))])
       [:label done]])))
-
-(def change-backdrop
-  (sub/sub
-   :change-backdrop
-   "B steps to the next backdrop color. The PPU can only be changed in
-  vertical blank, so this queues a write to the first color of its palette
-  memory ($3F00)."
-   [(rt/when-pressed :b [:inc :color])
-    (rt/queue 0x3F00
-              [[:lda :color] [:and [:imm 7]] [:tay] [:lda :backdrops :y]])]))
 
 ;; ---------------------------------------------------------------------------
 ;; The items screen
@@ -518,12 +542,12 @@
   "Being in a room. Arriving draws it, and `restart` (walking into
   another room) arrives afresh."
   {:enter  [(draw-room)]
-   :update [(call move-player)
+   :update [(call swing-stick)
+            (call move-player)
             (call enter-door)
             (call pick-up)
             (call read-sign)
             (call draw-player)
-            (call change-backdrop)
             (rt/when-pressed :start (rt/transition :items))
             (rt/when-pressed :select (rt/transition :title))]})
 
@@ -570,8 +594,7 @@
     :tiles (:tiles art/tiles)
     :palettes art/palettes
     :screens (assoc world/screens :items menu/screen-data)
-    :tables {:backdrops art/backgrounds
-             :world-palettes (vec (take 16 art/palettes))
+    :tables {:world-palettes (vec (take 16 art/palettes))
              :item-palettes menu/palettes
              :bit-of menu/bit-of
              :slot-x (mapv #(first (menu/slot-pixels %)) (range items/slots))
