@@ -20,6 +20,13 @@
   - the sprite palettes: up to four of three colors, found for all the
     frames together (they share the hardware's palette memory), or the ones
     you give with `:palettes`.
+  - or, with `:shared`, in two kinds. A picture belongs to a *character*:
+    its name without the number (:teenager-01 is the teenager's). The shared
+    characters' pictures get palettes that are always loaded (the player).
+    Every other character has *guest* palettes, for the tiles that don't fit
+    the shared ones: they go in the slots after the shared palettes, and a
+    room that shows that character loads them (there are only four slots, so
+    the fewer the player takes, the more a guest can have).
   - the tiles' drawings (strings of . 1 2 3, as cartridj.chr reads them),
     with identical ones shared, and for each frame the sprites to draw:
     [tile dx dy palette]. Tiles with nothing in them are left out.
@@ -125,6 +132,35 @@
                       {:palettes found}))
       found)))
 
+(defn character
+  "Whose picture a frame is: :teenager for :teenager-01."
+  [frame-name]
+  (keyword (str/replace (clojure.core/name frame-name) #"-\d+$" "")))
+
+(defn- guest-palettes
+  "{character [palette ...]} for the characters that aren't `shared`: just
+  the colors of the tiles that fit none of the `shared-palettes`, in at
+  most the slots that are left of `max-palettes`."
+  [frames shared-palettes shared max-palettes]
+  (let [slots (- max-palettes (count shared-palettes))
+        by-character (group-by (comp character :name) (remove #(shared (character (:name %))) frames))]
+    (into {}
+          (for [[who fs] by-character
+                :let [left-over (vec (for [{:keys [colors]} fs
+                                           t (tile-grid colors)
+                                           :let [used (tile-colors t)]
+                                           :when (and (seq used) (not (some #(every? (set %) used) shared-palettes)))]
+                                       (:colors t)))]
+                :when (seq left-over)]
+            (let [found (png/palettes-for left-over transparent)]
+              (when (> (count found) slots)
+                (throw (ex-info (str (clojure.core/name who) " needs " (count found) " sprite palette(s) of its own, besides the shared "
+                                     (count shared-palettes) ", and only " slots " of the " max-palettes " are left: "
+                                     (str/join "  " (map #(str "[" (hexes %) "]") found))
+                                     ". Fewer colors, or the shared palettes' colors, would fit.")
+                                {:character who :palettes found})))
+              [who found])))))
+
 (defn- palette-for
   "The index of the first of `palettes` that has all of `used`, or nil."
   [palettes used]
@@ -143,21 +179,29 @@
   (its :problems has the messages). Options: :palettes (use these instead
   of finding some: vectors of up to three NES colors), :max-palettes
   (default 4), :first-tile (the number of the first tile in CHR, default
-  0)."
-  [frames {:keys [palettes max-palettes first-tile] :or {max-palettes 4 first-tile 0}}]
+  0), and :shared (a set of characters, as in the namespace's doc: then the
+  result also has :guests, {character [palette ...]}, and each frame its
+  :character)."
+  [frames {:keys [palettes max-palettes first-tile shared] :or {max-palettes 4 first-tile 0}}]
   (let [problems (vec (concat (mapcat :problems frames) (mapcat tile-problems frames)))
         _ (when (seq problems)
             (throw (ex-info (str (count problems) " problem" (when (> (count problems) 1) "s") " with the pictures:\n  "
                                  (str/join "\n  " problems))
                             {:problems problems})))
-        palettes (if palettes
-                   (mapv vec palettes)
-                   (sprite-palettes frames max-palettes))
+        grouped? (boolean shared)
+        palettes (cond
+                   palettes (mapv vec palettes)
+                   grouped? (let [mine (filter #(shared (character (:name %))) frames)]
+                              (if (seq mine) (sprite-palettes mine max-palettes) []))
+                   :else (sprite-palettes frames max-palettes))
+        guests (when grouped? (guest-palettes frames palettes shared max-palettes))
+        ;; the palettes a frame's tiles can use: the shared ones, then its character's own
+        palettes-of (fn [frame-name] (into palettes (get guests (character frame-name))))
         ;; every tile needs a palette that has all its colors
         unplaced (for [{:keys [name colors]} frames
                        t (tile-grid colors)
                        :let [used (tile-colors t)]
-                       :when (and (seq used) (not (palette-for palettes used)))]
+                       :when (and (seq used) (not (palette-for (palettes-of name) used)))]
                    (str (clojure.core/name name) ": the tile at row " (:row t) ", column " (:col t)
                         " uses " (hexes used) ", which no palette has together"))
         _ (when (seq unplaced)
@@ -171,19 +215,22 @@
            (let [placed (for [t (tile-grid colors)
                               :let [used (tile-colors t)]
                               :when (seq used)
-                              :let [p (palette-for palettes used)]]
-                          [t p (drawing (:colors t) (palettes p))])
+                              :let [ps (palettes-of name)
+                                    p (palette-for ps used)]]
+                          [t p (drawing (:colors t) (ps p))])
                  numbers (reduce (fn [numbers [_ _ d]] (if (contains? numbers d) numbers (assoc numbers d (count numbers))))
                                  numbers placed)]
              [numbers
               (conj out {:name name
+                         :character (character name)
                          :sprites (vec (for [[t p d] placed]
                                          [(+ first-tile (numbers d)) (* 8 (:col t)) (* 8 (:row t)) p]))})]))
          [{} []]
          frames)]
-    {:palettes palettes
-     :tiles (mapv key (sort-by val numbers))
-     :frames out}))
+    (cond-> {:palettes palettes
+             :tiles (mapv key (sort-by val numbers))
+             :frames (if grouped? out (mapv #(dissoc % :character) out))}
+      grouped? (assoc :guests guests))))
 
 (defn- pictures
   "The PNG files in `dir` (or each of the directories `dir` is a collection
@@ -206,8 +253,9 @@
 
 (defn write-edn
   "`art` (as from `build`) as readable EDN text: a drawing per line."
-  [{:keys [palettes tiles frames]}]
+  [{:keys [palettes guests tiles frames]}]
   (str "{:palettes " (pr-str palettes) "\n"
+       (when guests (str " :guests " (pr-str guests) "\n"))
        " :tiles\n [" (str/join "\n  " (map pr-str tiles)) "]\n"
        " :frames\n [" (str/join "\n  " (map pr-str frames)) "]}\n"))
 

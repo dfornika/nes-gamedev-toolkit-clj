@@ -157,6 +157,18 @@
   (harness/frames! m 3)
   m)
 
+(deftest guests-bring-their-own-sprite-palettes
+  (is (= #{:teenager} (art/guests-of :teenager)) "the teenager's colors aren't the player's")
+  (is (= #{} (art/guests-of :dad)) "the dad is drawn in the player's, for now")
+  (is (<= (+ art/guest-slot (count (first (vals art/guest-palettes)))) 4) "there's a slot for it")
+  (testing "the teenager's pictures use slot 3 (the guest's) or the player's"
+    (let [palettes-used (set (for [[_ _ _ p] (art/character-pieces :teenager)] p))]
+      (is (contains? palettes-used art/guest-slot))
+      (is (every? #(< % 4) palettes-used))))
+  (testing "no room has two guests"
+    (doseq [[room {:keys [npcs enemies]}] world/rooms]
+      (is (<= (count (distinct (mapcat #(art/guests-of (:kind %)) (concat npcs enemies)))) 1) (str room)))))
+
 (deftest the-dad-can-be-talked-to
   (let [m (inside-the-house! (game))
         {:keys [x y]} (first (:npcs (get (into {} world/rooms) :house)))

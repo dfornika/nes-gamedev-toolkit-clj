@@ -30,11 +30,16 @@
   [only]
   (let [art (sprites/import! pictures output
                              :only only
+                             ;; the player's palettes are always loaded; everyone else
+                             ;; brings what the player's don't have (see cartridj.sprites)
+                             :shared #{:player}
                              ;; tile 0 is the blank one (poco.core/tiles), so ours start at 1
                              :first-tile 1)]
     (println (count (:frames art)) "frames:" (mapv :name (:frames art)))
-    (println (count (:tiles art)) "tiles;" (count (:palettes art)) "sprite palettes:"
+    (println (count (:tiles art)) "tiles;" (count (:palettes art)) "shared sprite palettes:"
              (mapv #(mapv (partial format "$%02X") %) (:palettes art)))
+    (doseq [[who palettes] (:guests art)]
+      (println "  " (name who) "brings:" (mapv #(mapv (partial format "$%02X") %) palettes)))
     (println "wrote" output)
     art))
 

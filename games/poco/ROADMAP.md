@@ -18,7 +18,7 @@ see "Assets as data" and "The asset pipeline" in the toolkit's roadmap.
 - Tiles: the real streets, houses, trees, fences (more than four palettes of
   color per room is the limit: look at `art/palettes`).
 - Rooms: `world.cljc` is the map. Bigger is just more rooms.
-- Per-room palettes are not possible yet: all rooms share four background
+- Per-room *background* palettes are not possible yet (sprites have them: see the README): all rooms share four background
   palettes. Worth adding if the neighborhood needs it (a night room, an indoor
   room that isn't brown).
 
@@ -29,9 +29,9 @@ Each of these uses what's there:
 1. **NPCs to talk to.** *Started*: a room's `:npcs` stand there, can't be
    walked through, and say two lines when faced and A is pressed (the dad in
    the house, drawn as the player for now). Still to do: their own art, which
-   needs **sprite palettes per room** (the player takes three of the four, so
-   each room can bring one palette of its own for the people in it: see
-   "Colors of the sprites" in the README); a longer talk than two lines; and
+   needs the colors of the people in a room to fit in its sprite palettes:
+   the player takes three of the four, and a room loads one more for its
+   guest (**done**: see "Colors of the sprites" in the README); a longer talk than two lines; and
    the dad giving the wooden sword.
 2. **Using an item.** B swings the stick already (the swing is two pictures per
    direction: `poses.edn`), but it doesn't hit anything yet: that wants

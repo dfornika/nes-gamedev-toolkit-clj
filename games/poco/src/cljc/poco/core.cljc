@@ -144,12 +144,36 @@
                       [:lda [:imm bottom-left]] [:sta :ppudata]
                       [:lda [:imm bottom-right]] [:sta :ppudata])])))
 
+(defn- standing-in
+  "The characters (:npcs and :enemies) of the room called `name`."
+  [name]
+  (let [room (get (into {} world/rooms) name)]
+    (concat (:npcs room) (:enemies room))))
+
+(defn- guest-palettes
+  "Inside draw-screen: load the sprite palettes of the guest character
+  that's in this room (see cartridj.sprites): the people and enemies of the
+  room need theirs, in the slots after the player's. A room can have one
+  guest's palettes, not two."
+  [name]
+  (let [guests (distinct (mapcat #(art/guests-of (:kind %)) (standing-in name)))]
+    (when (> (count guests) 1)
+      (throw (ex-info (str "The room " (pr-str name) " has characters with palettes of their own: "
+                           (pr-str guests) ". There's room for one guest's in a room.") {})))
+    (when-let [who (first guests)]
+      (for [[i palette] (map-indexed vector (art/guest-palettes who))
+            :let [slot (+ art/guest-slot i)]]
+        [(video-address (+ 0x3F11 (* 4 slot)))     ; the first of its three colors
+         (for [color palette]
+           [[:lda [:imm color]] [:sta :ppudata]])]))))
+
 (defn draw-room
   "Draw the room the player is in (the screen goes blank while it does)."
   []
   (rt/draw-screen
    (world-palettes)
    (by-room #(rt/background %))
+   (by-room guest-palettes)
    (by-room take-away-pickup)))
 
 (def start-game
@@ -163,12 +187,6 @@
    (gen/move :swing [:imm 0])
    (gen/move :items [:imm menu/starting-bits])
    (gen/move :selected [:imm 0])])
-
-(defn- standing-in
-  "The characters (:npcs and :enemies) of the room called `name`."
-  [name]
-  (let [room (get (into {} world/rooms) name)]
-    (concat (:npcs room) (:enemies room))))
 
 (defn- within
   "Branch to `no` unless the byte at `src` is from `lo` to `hi`."

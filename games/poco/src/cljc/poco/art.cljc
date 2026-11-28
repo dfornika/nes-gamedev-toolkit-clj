@@ -67,6 +67,17 @@
   (let [{:keys [walk swing]} (:down poses)]
     (+ 1 (count walk) (count swing))))
 
+(def guest-palettes
+  "{character [palette ...]}: the sprite palettes a character brings, in
+  the slots after the shared ones (see cartridj.sprites). A room that shows
+  the character loads them: see poco.core/draw-room."
+  (:guests art))
+
+(def guest-slot
+  "The first sprite palette slot that guests' palettes go in: after the
+  shared ones (the player's)."
+  (count (:palettes art)))
+
 (defn missing
   "The pictures `poses` names that haven't been imported."
   []
@@ -107,6 +118,17 @@
   (pieces (:stand (or (character-poses kind)
                       (throw (ex-info (str "No pictures for " (pr-str kind) ": see sprites/enemies/poses.edn and npcs/poses.edn") {}))))
           false))
+
+(defn guests-of
+  "The characters whose palettes a character of this `kind` (:teenager,
+  :dad) needs loaded: none if every picture of it fits the shared palettes."
+  [kind]
+  (let [named (into {} (map (juxt :name :character)) (:frames art))
+        stand (:stand (character-poses kind))]
+    (set (for [picture (if (vector? stand) stand [stand])
+               :let [who (named picture)]
+               :when (contains? guest-palettes who)]
+           who))))
 
 (defn pose-pieces
   "The pieces for a direction and a step: 0 is standing, 1 to 4 the walk
@@ -203,9 +225,12 @@
 
 (def palettes
   "Four background palettes (each three colors besides the backdrop) and
-  four for sprites, which are the player's: the importer found them in the
-  pictures. Colors are names (see cartridj.palette/colors) or numbers."
+  four for sprites: the player's, which the importer found in the pictures,
+  and a guest's after them (a room loads the guest it needs: see
+  poco.core/draw-room). Colors are names (see cartridj.palette/colors) or numbers."
   (palette/palettes
    {:backdrop   backdrop
     :background (mapv (:colors background) (:palettes background))
-    :sprites    (:palettes art)}))
+    ;; the shared palettes, then (to start with) the first guest's: a room
+    ;; that shows another guest loads its own over them
+    :sprites    (vec (take 4 (concat (:palettes art) (mapcat val guest-palettes))))}))

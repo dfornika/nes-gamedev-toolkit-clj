@@ -102,12 +102,19 @@ imported yet; they're drawn as that direction's standing picture, so the
 game always works. Left is drawn as right, mirrored (`:left {:mirror :right}`), so
 side-on art only needs to be made facing right.
 
-**Colors of the sprites:** the player and the enemies share four sprite
-palettes of three colors, and every 8x8 tile of a picture has to fit in one
-of them (the importer says which tile doesn't). So a new color costs a
-palette unless it only ever shares tiles with colors that some palette has
-already. Right now: brown, blue and white; dark red, blue and skin; dark red,
-brown and skin; and the teenager's black, green and sickly skin.
+**Colors of the sprites:** the NES has four sprite palettes of three colors,
+and every 8x8 tile of a picture has to fit in one of them (the importer says
+which tile doesn't). The player's pictures get *shared* palettes, which are
+always loaded (three right now: the fewer the player takes, the more is left
+for everyone else). Every other character (the teenager, the NPCs) brings
+*guest* palettes, only for the tiles that don't fit the shared ones, and a
+room that has that character in it loads them (`:npcs` and `:enemies` in
+`world.cljc`) into the slots after the shared ones. So each room can have one
+guest's colors, not two: the importer says so if a character needs more than
+there's room for, and the game won't build with two guests in a room. A
+character that only uses the player's colors costs nothing. Right now: the
+player has brown/blue/white, dark red/blue/skin and dark red/brown/skin; the
+teenager brings black/green/sickly skin.
 
 ## In the game
 
