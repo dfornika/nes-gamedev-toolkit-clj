@@ -106,7 +106,9 @@
    :name name
    :cartridge cartridge
    :org org
-   :symbols (into (sorted-map-by (fn [a b] (compare [(symbols a) (str a)] [(symbols b) (str b)]))) symbols)
+   :symbols (into (sorted-map-by (fn [a b] (compare [(symbols a) (str a)] [(symbols b) (str b)])))
+                   ;; (the usual PPUCTRL is left out: ->rom supplies it)
+                  (if (= 0x80 (:ctrl-base symbols)) (dissoc symbols :ctrl-base) symbols))
    :code (vec code)
    :tiles (mapv chr/rows (chr/bank-tiles chr))})
 
@@ -120,7 +122,7 @@
     :ines (vec (mapcat #(unhex (get m % "")) [:header :trainer :prg :chr :rest]))
     :cartridj/source
     (rom/ines (merge (:cartridge m)
-                     {:prg (:bytes (asm/assemble (:code m) {:org (:org m) :symbols (:symbols m)}))
+                     {:prg (:bytes (asm/assemble (:code m) {:org (:org m) :symbols (merge {:ctrl-base 0x80} (:symbols m))}))
                       :chr (chr/bank (map chr/tile (:tiles m)))}))
     (throw (ex-info (str "Unknown :format " (pr-str (:format m)) ". There are :ines and :cartridj/source") {}))))
 
