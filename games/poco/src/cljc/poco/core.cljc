@@ -46,6 +46,15 @@
   the swing's two pictures (see sprites/player/poses.edn)."
   12)
 
+(def swing-reach
+  "How far the stick reaches past the player's feet, in pixels: a wimpy
+  weapon, so close."
+  10)
+
+(def hurt-frames
+  "How long an enemy flickers after a hit."
+  20)
+
 (def frames-per-step
   "How many frames of each step of the walking, as a power of two (the
   number of times to halve the frame count): 3 is 8 frames, so a step
@@ -60,6 +69,15 @@
 ;; ---------------------------------------------------------------------------
 ;; What the game remembers
 
+(def enemies
+  "Every enemy of every room (:enemies in poco.world), each with its :room
+  and a number (:index): the game keeps how many hits each has left, by
+  that number."
+  (vec (map-indexed (fn [i enemy] (assoc enemy :index i))
+                    (for [[room {:keys [enemies]}] world/rooms
+                          enemy enemies]
+                      (assoc enemy :room room)))))
+
 (def variables
   [[:room   [:enum (zipmap (range) world/room-names)] {:doc "Which room the player is in"}]
    [:player {:x :u8.8, :y :u8.8}]                      ; fixed point: it can move by parts of a pixel
@@ -72,6 +90,8 @@
    [:items  [:bits (into {} (map-indexed (fn [i {:keys [id]}] [id i]) items/items))]
     {:doc "The items the player has: a bit each, in the order of poco.items"}]
    [:message :u8 {:doc "Which of poco.talk's messages to show"}]
+   [:enemy-hp [:array (max 1 (count enemies)) :u8] {:doc "Hits each enemy has left (0: gone), as numbered in `enemies`"}]
+   [:enemy-hurt [:array (max 1 (count enemies)) :u8] {:doc "Frames each enemy has left of flickering after a hit"}]
    [:selected :u8 {:doc "The slot the items screen's cursor is on (0 to 7)"}]
    [:redraw :bool {:doc "The words on the items screen need writing"}]])
 
@@ -144,11 +164,24 @@
                       [:lda [:imm bottom-left]] [:sta :ppudata]
                       [:lda [:imm bottom-right]] [:sta :ppudata])])))
 
-(defn- standing-in
-  "The characters (:npcs and :enemies) of the room called `name`."
+(defn- enemies-in
+  "The enemies (with their numbers) in the room called `name`."
   [name]
-  (let [room (get (into {} world/rooms) name)]
-    (concat (:npcs room) (:enemies room))))
+  (filter #(= name (:room %)) enemies))
+
+(defn- standing-in
+  "The characters (:npcs and enemies) of the room called `name`."
+  [name]
+  (concat (:npcs (get (into {} world/rooms) name)) (enemies-in name)))
+
+(defn- alive
+  "`code` for a character, run only while it's there: people always are,
+  an enemy until it's out of hits."
+  [{:keys [index]} code]
+  (if index
+    [[:lda [:+ :enemy-hp index]]
+     (gen/when-flag :not-zero code)]
+    code))
 
 (defn- guest-palettes
   "Inside draw-screen: load the sprite palettes of the guest character
@@ -185,6 +218,9 @@
    (gen/move :walk [:imm 0])
    (gen/move :pose [:imm 0])
    (gen/move :swing [:imm 0])
+   (for [{:keys [index hp]} enemies]
+     [[:lda [:imm hp]] [:sta [:+ :enemy-hp index]]
+      [:lda [:imm 0]] [:sta [:+ :enemy-hurt index]]])
    (gen/move :items [:imm menu/starting-bits])
    (gen/move :selected [:imm 0])])
 
@@ -228,7 +264,7 @@
         (rt/on-kinds [:solid :sign] [[:jmp hit]])])
      (by-room (fn [name]
                 (for [who (standing-in name)]
-                  (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]]))))
+                  (alive who (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]])))))
      else
      [:jmp done]
      [:label hit]
@@ -379,6 +415,37 @@
                  [(gen/move :walk [:imm 0])
                   (gen/move :pose [:imm 0])]))]))
 
+(defn- swing-box
+  "Where the stick hits when the player faces `direction`: a box just past
+  their feet, `swing-reach` deep (see `feet-of` for the box of an enemy it
+  has to overlap)."
+  [direction]
+  (let [{:keys [left top right bottom]} feet
+        r swing-reach]
+    (case direction
+      :right [(inc right) top (+ right r) bottom]
+      :left  [(- left r) top (dec left) bottom]
+      :down  [left (inc bottom) right (+ bottom r)]
+      :up    [left (- top r) right (dec top)])))
+
+(def strike
+  (sub/sub
+   :strike
+   "The stick comes down: every enemy in the room whose feet are in the box
+  in front of the player loses a hit, and flickers for a moment."
+   (by-room
+    (fn [name]
+      (for [{:keys [index] :as who} (enemies-in name)]
+        (alive who
+               (for [[i direction] (map-indexed vector art/directions)]
+                 [[:lda :facing]
+                  [:cmp [:imm i]]
+                  (gen/when-flag :equal
+                                 (when-overlapping (swing-box direction) (feet-of who)
+                                                   [[:dec [:+ :enemy-hp index]]
+                                                    [:lda [:imm hurt-frames]]
+                                                    [:sta [:+ :enemy-hurt index]]]))])))))))
+
 (def swing-stick
   (sub/sub
    :swing-stick
@@ -395,7 +462,11 @@
                    [[:cmp [:imm (quot swing-frames 2)]]
                     (gen/if-flag :carry
                                  (gen/move :pose [:imm 5])
-                                 (gen/move :pose [:imm 6]))])]
+                                 (gen/move :pose [:imm 6]))
+                    ;; the stick comes down as the second picture starts
+                    [:lda :swing]
+                    [:cmp [:imm (dec (quot swing-frames 2))]]
+                    (gen/when-flag :equal (call strike))])]
      (rt/when-pressed
       :b
       [[:lda :items]
@@ -409,11 +480,22 @@
   (sub/sub
    :draw-characters
    "Draw the people and enemies of the room (:npcs and :enemies in
-  poco.world), standing where the room puts them. They don't move yet."
+  poco.world), standing where the room puts them: not the enemies that are
+  out of hits, and one that's just been hit flickers. They don't move yet."
    (by-room
     (fn [name]
-      (for [{:keys [kind x y]} (standing-in name)]
-        (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind)))))))
+      (for [{:keys [kind x y index] :as who} (standing-in name)
+            :let [skip (asm/genlabel "unseen")]]
+        (alive who
+               [(when index
+                  [[:lda [:+ :enemy-hurt index]]
+                   (gen/when-flag :not-zero
+                                  [:dec [:+ :enemy-hurt index]]
+                                  [:lda [:+ :enemy-hurt index]]
+                                  [:and [:imm 2]]
+                                  (gen/when-flag :not-zero [:jmp skip]))])
+                (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind))
+                [:label skip]]))))))
 
 (def talk-to
   (sub/sub
@@ -678,7 +760,16 @@
               (let [{:keys [left top right bottom]} feet]
                 [[:rect {:x (+ (:x player) left) :y (+ (:y player) top)
                          :w (- (inc right) left) :h (- (inc bottom) top)
-                         :color :lime :label "feet"}]])))}])
+                         :color :lime :label "feet"}]])))}
+   {:name "Swing"
+    :doc "Where the stick hits, while it's swinging."
+    :draw (fn [{:keys [player facing swing] state :rt.state}]
+            (when (and (= state :room) (pos? (or swing 0)))
+              (let [direction (if (number? facing) (nth art/directions facing) facing)
+                    [x1 y1 x2 y2] (swing-box direction)]
+                [[:rect {:x (+ (:x player) x1) :y (+ (:y player) y1)
+                         :w (inc (- x2 x1)) :h (inc (- y2 y1))
+                         :color :red :label "stick"}]])))}])
 
 (defn build
   "Build the cartridge. Returns {:rom the .nes file's bytes, :name, ...}."

@@ -118,7 +118,7 @@ teenager brings black/green/sickly skin.
 
 ## In the game
 
-D-pad: walk. A: read a sign or talk to someone (face them, close up; A or B closes the text). People and the teenager can't be walked through. B: swing the stick (once you've picked it up). Start: the items screen (D-pad moves the cursor; Start or B goes back). Select: back to the title.
+D-pad: walk. A: read a sign or talk to someone (face them, close up; A or B closes the text). People and the teenager can't be walked through. B: swing the stick (once you've picked it up): it hits what's just in front of you, and the teenager goes after three hits. Start: the items screen (D-pad moves the cursor; Start or B goes back). Select: back to the title.
 Walk through a gap in the trees into the next room, or into the brick house's door to go inside (and out again through the door at the bottom). There's a stick lying on the floor inside: walk over it to pick it up (then look in the items screen). You start without it; `starting` in `poco.items` says what you begin with. Walking diagonally is no faster than straight: both directions are slowed to 0.7071 (1 / the square root of 2) of the speed.
 
 ## Looking inside

@@ -33,10 +33,13 @@ Each of these uses what's there:
    the player takes three of the four, and a room loads one more for its
    guest (**done**: see "Colors of the sprites" in the README); a longer talk than two lines; and
    the dad giving the wooden sword.
-2. **Using an item.** B swings the stick already (the swing is two pictures per
-   direction: `poses.edn`), but it doesn't hit anything yet: that wants
-   something to hit, and a probe in front of the player, like reading a sign.
-   Then the items screen gets an "equipped" marker, and the bat does the same. The pizza restores a heart; the firecracker
+2. **Using an item.** B swings the stick (two pictures per direction:
+   `poses.edn`), and it hits: a box just past the player's feet
+   (`swing-reach`, 10 pixels: a wimpy weapon; the debugger's "Swing" overlay
+   draws it), against enemies' feet. An enemy has `:hp` hits, flickers when
+   hit and is gone at zero. Still to do: the reach and damage belong to the
+   equipped item (the wooden sword reaches further), so the items screen gets
+   an "equipped" marker; the pizza restores a heart; the firecracker goes bang. The pizza restores a heart; the firecracker
    goes bang.
 3. **Hearts.** A health variable, shown at the top of the screen, and a way to
    take damage. This needs a status bar: sprites for the hearts to start with.
