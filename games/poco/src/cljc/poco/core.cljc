@@ -252,24 +252,25 @@
   (let [{:keys [left top right bottom]} feet]
     [(+ x left) (+ y top) (+ x right) (+ y bottom)]))
 
-(defn- on-feet-solid
-  "Run `then` if any corner of the player's feet is in something solid,
-  or in a character standing in the room, otherwise `else`."
-  [then else]
-  (let [hit (asm/genlabel "bumped")
-        done (asm/genlabel "free")
-        {:keys [left top right bottom]} feet]
-    [(for [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
-       [(rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
-        (rt/on-kinds [:solid :sign] [[:jmp hit]])])
-     (by-room (fn [name]
-                (for [who (standing-in name)]
-                  (alive who (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]])))))
-     else
-     [:jmp done]
-     [:label hit]
-     then
-     [:label done]]))
+(def feet-in-way
+  (sub/sub
+   :feet-in-way
+   "A is 1 if the player's feet are in something solid, or in a character
+  standing in the room, and 0 if the way is clear."
+   (let [hit (asm/genlabel "bumped")
+         done (asm/genlabel "free")
+         {:keys [left top right bottom]} feet]
+     [(for [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
+        [(rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
+         (rt/on-kinds [:solid :sign] [[:jmp hit]])])
+      (by-room (fn [name]
+                 (for [who (standing-in name)]
+                   (alive who (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]])))))
+      [:lda [:imm 0]]
+      [:jmp done]
+      [:label hit]
+      [:lda [:imm 1]]
+      [:label done]])))
 
 (defn- leave-room
   "The player's gone past the `edge` of the room (:left :right :up :down):
@@ -289,23 +290,76 @@
           (rt/restart)]             ; start the new room afresh
          put-back)))))
 
+(defn- corner-solid
+  "Run `then` if the corner [dx dy] of the player's feet is in something solid."
+  [[dx dy] then]
+  [(rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
+   (rt/on-kinds [:solid :sign] then)])
+
+(defn- slide-round
+  "Inside `step`, when the player has walked into something: put them back
+  (`revert`) and, if only one of the two corners of the feet at the front
+  is in a wall, nudge them a pixel across (away from the wall), so they
+  slide round the corner instead of sticking to it. Walking into the
+  middle of a wall, or into a person, only puts them back."
+  [axis sign revert]
+  (let [horizontal? (= axis :player/x)
+        {:keys [left top right bottom]} feet
+        front (if horizontal?
+                (if (= sign :+) right left)
+                (if (= sign :+) bottom top))
+        [first-corner second-corner] (if horizontal?
+                                       [[front top] [front bottom]]
+                                       [[left front] [right front]])
+        across (gen/whole (if horizontal? :player/y :player/x))
+        nudge (fn [more?]
+                [(gen/with-operand (if more? :inc :dec) across)
+                 (call feet-in-way)
+                 (gen/when-flag :not-zero
+                                (gen/with-operand (if more? :dec :inc) across))])
+        first-blocked (asm/genlabel "corner")
+        done (asm/genlabel "slid")]
+    [(corner-solid first-corner [[:jmp first-blocked]])
+     ;; the first corner is clear: if the second isn't, nudge towards the first
+     (corner-solid second-corner [revert (nudge false) [:jmp done]])
+     revert
+     [:jmp done]
+     [:label first-blocked]
+     (corner-solid second-corner [revert [:jmp done]])
+     revert
+     (nudge true)
+     [:label done]]))
+
 (defn- step
   "What walking in a direction does. `axis` is :player/x or :player/y,
   `sign` which way it changes, `facing` which way that makes the player
   face, and the player crosses `edge` when the whole pixels of `axis` are
   `edge-at` or more (walking past 0 wraps round to 255, so that's how
-  walking off the left or top shows up)."
-  [button {:keys [axis sign facing edge edge-at]}]
-  (rt/when-held button
-                [(gen/move :facing [:imm (.indexOf art/directions facing)])
-                 (gen/move :moving [:imm 1])
-                 (gen/move16 :rt/old axis)                       ; where we were
-                 ((if (= sign :+) gen/add16 gen/sub16) axis :speed)
-                 [:lda (gen/whole axis)]
-                 [:cmp [:imm edge-at]]
-                 (gen/if-flag :carry
-                              (leave-room edge (gen/move16 axis :rt/old))
-                              (on-feet-solid (gen/move16 axis :rt/old) nil))]))
+  walking off the left or top shows up) but less than `edge-until`, if
+  that's given (going off the top, the player has to get their feet
+  into the top row of the room first, or any column would be a way out)."
+  [button {:keys [axis sign facing edge edge-at edge-until]}]
+  (let [done (asm/genlabel "stepped")
+        revert (gen/move16 axis :rt/old)
+        leave [(leave-room edge revert) [:jmp done]]]
+    (rt/when-held button
+                  [(gen/move :facing [:imm (.indexOf art/directions facing)])
+                   (gen/move :moving [:imm 1])
+                   (gen/move16 :rt/old axis)                       ; where we were
+                   ((if (= sign :+) gen/add16 gen/sub16) axis :speed)
+                   [:lda (gen/whole axis)]
+                   [:cmp [:imm edge-at]]
+                   (gen/when-flag :carry
+                                  (if edge-until
+                                    [[:cmp [:imm edge-until]]
+                                     ;; (only if the feet are clear of the wall there)
+                                     (gen/when-flag :no-carry
+                                                    (call feet-in-way)
+                                                    (gen/when-flag :zero leave))]
+                                    leave))
+                   (call feet-in-way)
+                   (gen/when-flag :not-zero (slide-round axis sign revert))
+                   [:label done]])))
 
 (def enter-door
   (sub/sub
@@ -402,7 +456,7 @@
     (step :right {:axis :player/x :sign :+ :facing :right :edge :right :edge-at 240})
     (step :left  {:axis :player/x :sign :- :facing :left  :edge :left  :edge-at 240})
     (step :down  {:axis :player/y :sign :+ :facing :down  :edge :down  :edge-at 208})
-    (step :up    {:axis :player/y :sign :- :facing :up    :edge :up    :edge-at 224})
+    (step :up    {:axis :player/y :sign :- :facing :up    :edge :up    :edge-at 224 :edge-until 246})
     ;; the walk: standing still is pose 0, and walking goes round pose 1 to 4
     [:lda :moving]
     (gen/if-flag :not-zero
