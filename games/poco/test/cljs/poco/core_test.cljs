@@ -3,6 +3,7 @@
   zeropage.harness): walking, the walk cycle, the walls, and the doors
   between rooms."
   (:require [cljs.test :refer [deftest is testing]]
+            [cartridj.chr :as chr]
             [poco.art :as art]
             [poco.menu :as menu]
             [poco.talk :as talk]
@@ -570,3 +571,14 @@
       (harness/poke-at! m (addr m :enemy-timer) 0)
       (harness/frame! m)
       (is (< (harness/peek-at m (addr m :enemy-dir)) 5)))))
+
+(deftest sprites-and-background-have-their-own-tiles
+  (let [chr (get-in (poco/build) [:source :chr])
+        tile (fn [table n] (vec (take 16 (drop (+ (* 4096 table) (* 16 n)) chr))))
+        sprite-tiles (:tiles art/sprite-tiles)]
+    (is (= (vec chr/blank) (tile 0 0)) "the background's tile 0 is blank")
+    (is (= (vec (first (:tiles art/tiles))) (tile 0 0)))
+    (is (= (vec (second sprite-tiles)) (tile 1 1)) "the sprites' tiles are in the second table")
+    (is (= (vec (nth (:tiles art/tiles) 5)) (tile 0 5)))
+    (is (<= (count (:tiles art/tiles)) 256))
+    (is (<= (count sprite-tiles) 256))))

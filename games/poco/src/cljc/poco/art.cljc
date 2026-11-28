@@ -211,21 +211,26 @@
                "........" "........" "........"])))
 
 (def tiles
-  "Everything in the cartridge's graphics, with names (see
-  cartridj.tileset). Tile 0 is blank, and the player's come next: the
-  importer numbers them from 1. Then the background's tiles, in the order
-  of tiles.edn."
-  (tileset/tileset (into (into [[:blank  [chr/blank]]
-                                [:player (map chr/tile (:tiles art))]]
+  "The background's graphics, with names (see cartridj.tileset): the
+  first pattern table. Tile 0 is blank, then the background's tiles, in the
+  order of tiles.edn, the font and the items."
+  (tileset/tileset (into (into [[:blank  [chr/blank]]]
                                (for [{:keys [id pixels]} (:metatiles background)]
                                  [id pixels]))
                          (into [[:slot    items/slot]
-                                [:cursor  [cursor]]
                                 [:font    font/tiles]
                                 [:box-font box-font]]
                                ;; each item's picture: 2x2 tiles
                                (for [{:keys [id drawing]} items/items]
                                  [(keyword "item" (name id)) drawing])))))
+
+(def sprite-tiles
+  "The sprites' graphics (the second pattern table): tile 0 is blank, and
+  the importer's pictures come next, numbered from 1 (the player, the
+  enemies, the explosion), then the items screen's cursor."
+  (tileset/tileset [[:blank  [chr/blank]]
+                    [:sprites (map chr/tile (:tiles art))]
+                    [:cursor [cursor]]]))
 
 (def metatiles
   "The 16x16 blocks that backgrounds are made of: four tiles, and which of

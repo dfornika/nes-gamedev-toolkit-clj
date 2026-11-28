@@ -127,8 +127,11 @@ flickers after a hit, can't walk through walls or the player, and only moves
 in the room you're in.
 
 The importer reuses a tile that's another one flipped (the sprite attributes
-flip it back), which is what lets all these pictures fit the tiles there's
-room for (256 in all, background and sprites together).
+flip it back), to save tiles. Sprites and the background have a pattern table
+each (256 tiles each: `poco.art/sprite-tiles` and `poco.art/tiles`; see
+`:sprite-tiles` in `cartridj.runtime/program`), so the sprites' tiles number
+from their own 0, and the explosion's, the teenager's and the player's
+pictures all fit.
 
 ## In the game
 

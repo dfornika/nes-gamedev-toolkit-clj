@@ -403,7 +403,7 @@
    [:sta :rt/queue-end]                 ; anything queued was for the old screen
    [:bit :ppustatus]                    ; make PPUADDR expect a high byte
    body
-   [:lda [:imm 0x80]]
+   [:lda [:imm :ctrl-base]]
    [:sta :rt/ctrl]
    [:sta :ppuctrl]])                    ; NMI back on; it turns the picture on
 
@@ -701,14 +701,14 @@
      [:cpx [:imm 32]])
 
    (gen/move :rt/mask [:imm 0x1E])      ; show background and sprites
-   (gen/move :rt/ctrl [:imm 0x80])      ; NMI on, tiles from pattern table 0
+   [:lda [:imm :ctrl-base]] [:sta :rt/ctrl] ; NMI on, and which pattern tables (see `program`)
    ;; In no state yet, with a transition to the initial state waiting: so
    ;; the first frame begins by running its entry action.
    (gen/move :rt/state [:imm 0xFF])
    (gen/move :rt/next [:imm (keyword "state" (name initial))])
    (gen/move16 :rt/seed [:imm 0xC0DE])
 
-   [:lda [:imm 0x80]]
+   [:lda [:imm :ctrl-base]]
    [:sta :ppuctrl]])                    ; NMI on
 
 (defn- dispatch
@@ -883,6 +883,12 @@
     :variables  the game's variables, as for memory/allocate
     :tiles      the graphics, as 16-byte tiles (see cartridj.chr),
                 from tile 0. To use `text`, put cartridj.font/tiles first
+    :sprite-tiles  optional: tiles for sprites only. Then the background's
+                `:tiles` are the first pattern table (256 tiles at most) and
+                these the second (256 more), the one sprites are drawn from:
+                a sprite's tile number counts from the start of these, and
+                the background's from the start of `:tiles`. Without it,
+                both use `:tiles`
     :palettes   32 colors: four background palettes, then four for sprites
                 (see cartridj.palette)
     :screens    {name screen}: backgrounds (see cartridj.screen), drawn
@@ -901,7 +907,7 @@
                 (NES.cljs: see nes.inspect.overlay). Passed through as they are
 
   Returns what rom/nrom returns, with :name."
-  [{:keys [name states initial variables tiles palettes screens levels metatiles tables songs overlays prg-size]}]
+  [{:keys [name states initial variables tiles sprite-tiles palettes screens levels metatiles tables songs overlays prg-size]}]
   (let [states (vec states)
         state-names (mapv first states)
         _ (when-not (some #{initial} state-names)
@@ -911,6 +917,13 @@
         state-sub (fn [phase [state-name state]]
                     (sub/sub (keyword (str (clojure.core/name state-name) "-" (clojure.core/name phase)))
                              (get state phase [])))
+        ;; (no `and` here: its expansion uses up numbers that label names are made
+        ;; from, and the games' prebuilt files in nes-cljs name their labels with them)
+        _ (when sprite-tiles
+            (when (> (count tiles) 256)
+              (throw (ex-info (str "The background's :tiles are " (count tiles) "; with :sprite-tiles there's room for 256") {})))
+            (when (> (count sprite-tiles) 256)
+              (throw (ex-info (str ":sprite-tiles are " (count sprite-tiles) ": 256 at most") {}))))
         levels? (boolean (seq levels))
         _ (when (and levels? (not metatiles))
             (throw (ex-info ":levels needs :metatiles too: the map the levels were made from" {})))]
@@ -950,6 +963,8 @@
                        [:db (sound/song notes)]])]
              :vectors {:nmi :nmi :reset :reset :irq :irq}
              :symbols (merge hw/registers
+                             ;; PPUCTRL: NMI on, and sprites from the second pattern table if they have one
+                             {:ctrl-base (if sprite-tiles 0x88 0x80)}
                              (into {} (map-indexed (fn [i n] [(keyword "state" (clojure.core/name n)) i])
                                                    state-names))
                              ;; each level's last ring start, and how far the camera can go
@@ -963,6 +978,8 @@
                                                (when (seq songs)
                                                  [[:music {:at :u16 :start :u16 :wait :u8 :on :bool}]])
                                                variables))
-             :chr (chr/bank tiles)})
+             :chr (chr/bank (if sprite-tiles
+                              (into (vec tiles) (concat (repeat (- 256 (count tiles)) chr/blank) sprite-tiles))
+                              tiles))})
            :name name
            :overlays overlays)))
