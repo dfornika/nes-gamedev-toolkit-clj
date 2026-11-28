@@ -1,7 +1,7 @@
 (ns poco.import
-  "Turns the pictures in resources/assets/sprites/player (drawn in Aseprite, one
-  PNG per frame, 16x32) into the data poco.core builds from:
-  resources/assets/sprites/player/player.edn, which says which colors are in the
+  "Turns the pictures in resources/assets/sprites/player and /enemies (drawn
+  in Aseprite, one PNG per frame, 16x32) into the data poco.core builds from:
+  resources/assets/sprites/sprites.edn, which says which colors are in the
   sprite palettes, what the tiles look like, and where each frame's eight
   sprites go. See cartridj.sprites for what it checks.
 
@@ -19,8 +19,11 @@
             [cartridj.sheets :as sheets]
             [cartridj.sprites :as sprites]))
 
-(def pictures "resources/assets/sprites/player")
-(def output "resources/assets/sprites/player/player.edn")
+(def pictures
+  "The folders of PNGs, one picture per frame: the characters share the
+  sprite palettes, so they're imported together."
+  ["resources/assets/sprites/player" "resources/assets/sprites/enemies"])
+(def output "resources/assets/sprites/sprites.edn")
 
 (defn import-sprites
   "`only` is a vector of picture names (\"player-03\"), or nil for all."

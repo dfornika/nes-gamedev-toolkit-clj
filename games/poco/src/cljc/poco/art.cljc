@@ -2,7 +2,7 @@
   "How The Legend of PoCo looks: every picture, and the colors they're drawn in.
 
   The player comes from the PNGs in resources/assets/sprites/player (drawn in
-  Aseprite; `clojure -T:build import` turns them into player.edn, see
+  Aseprite; `clojure -T:build import` turns them, and the enemies' in sprites/enemies, into sprites.edn, see
   poco.import). The background (the ground, trees, doors, signs...) is in
   resources/assets/tiles.edn, drawn in a tilesheet (a PNG: `clojure -T:build
   tiles` turns the cells it uses into sheets.edn), or as text, one character
@@ -25,7 +25,7 @@
 (def art
   "What the importer made from the PNGs: {:palettes :tiles :frames}.
   GENERATED: change the pictures, not this."
-  (util/inline-edn-resource "assets/sprites/player/player.edn"))
+  (util/inline-edn-resource "assets/sprites/sprites.edn"))
 
 (def poses
   "Which picture is which: {direction {:stand picture :walk [four pictures]}},
@@ -40,6 +40,11 @@
                                                             (pr-str mirror) ", which isn't there") {})))
                                    :flip? true)
                             pose)]))))
+
+(def enemy-poses
+  "How each enemy is drawn: {kind {:stand picture}}, from
+  resources/assets/sprites/enemies/poses.edn."
+  (util/inline-edn-resource "assets/sprites/enemies/poses.edn"))
 
 (def directions
   "The numbers the game keeps for the way the player faces."
@@ -94,6 +99,13 @@
     (if flip?
       (flip-pieces found (width found))
       found)))
+
+(defn enemy-pieces
+  "What to draw for an enemy of `kind` (:teenager)."
+  [kind]
+  (pieces (:stand (or (enemy-poses kind)
+                      (throw (ex-info (str "enemies/poses.edn has no " (pr-str kind)) {}))))
+          false))
 
 (defn pose-pieces
   "The pieces for a direction and a step: 0 is standing, 1 to 4 the walk

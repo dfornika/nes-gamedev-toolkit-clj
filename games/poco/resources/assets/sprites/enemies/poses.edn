@@ -1,0 +1,4 @@
+;; How each enemy is drawn: a PNG's name (:teenager-01 is the file
+;; teenager-01.png, in this folder), as in player/poses.edn. So far they only
+;; stand, and face one way.
+{:teenager {:stand :teenager-01}}

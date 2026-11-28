@@ -30,7 +30,7 @@ Change something, save, run that line again: a new game, in under a second.
 | `src/cljc/poco/menu.cljc` | **The items screen's layout** (slots, where the words go). |
 | `src/cljc/poco/talk.cljc` | **What the game says** in its text box: finding an item, and signs (a room's `:sign` in `world.cljc`). |
 | `src/cljc/poco/core.cljc` | **The rules**: walking speed (`walk-speed`), how fast the legs move (`frames-per-step`), the player's feet. |
-| `resources/assets/sprites/player/*.png` | **The player**, drawn in Aseprite (16x32, one file per picture; `player.ase` is the Aseprite file they come from). The other characters and the items are drawn in `sprites/npcs` and `sprites/items`, and aren't in the game yet. | |
+| `resources/assets/sprites/{player,enemies}/*.png` | **The player and the enemies**, drawn in Aseprite (16x32, one file per picture; `player.ase`, `teenager-01.ase`... are the Aseprite files they come from). They share the four sprite palettes, so they're imported together. The NPCs and the items are drawn in `sprites/npcs` and `sprites/items`, and aren't in the game yet. | |
 
 After changing the PNGs, turn them into data again:
 
@@ -69,9 +69,10 @@ is one-to-one):
 resources/assets/
   tiles/outdoors.png            the background's tilesheet (tiles.edn says which cell is which)
   sprites/player/player-NN.png  the player's pictures, and player.ase they come from
+  sprites/enemies/teenager-NN.png  the enemies' (poses.edn: how each is drawn)
   sprites/npcs/*.ase            the other characters (not in the game yet)
   sprites/items/items-01.ase    the items' art (not in the game yet)
-  *.edn                         data: items, palettes, tiles; generated: sheets.edn, player.edn
+  *.edn                         data: items, palettes, tiles; generated: sheets.edn, sprites/sprites.edn
 ```
 
 **Windows to WSL:** if the editor is on Windows, `bin/fetch-art` copies the
@@ -100,6 +101,13 @@ facing away, 12 and 13 facing right: B swings the stick). `(poco.art/missing)` l
 imported yet; they're drawn as that direction's standing picture, so the
 game always works. Left is drawn as right, mirrored (`:left {:mirror :right}`), so
 side-on art only needs to be made facing right.
+
+**Colors of the sprites:** the player and the enemies share four sprite
+palettes of three colors, and every 8x8 tile of a picture has to fit in one
+of them (the importer says which tile doesn't). So a new color costs a
+palette unless it only ever shares tiles with colors that some palette has
+already. Right now: brown, blue and white; dark red, blue and skin; dark red,
+brown and skin; and the teenager's black, green and sickly skin.
 
 ## In the game
 
