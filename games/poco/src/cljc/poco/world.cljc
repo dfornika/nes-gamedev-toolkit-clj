@@ -86,8 +86,9 @@
 
    [:park
     {:exits {:left :home, :up :woods}
-     ;; `hp`: how many hits it takes
-     :enemies [{:kind :teenager, :x 176, :y 80, :hp 3}]
+     ;; `hp`: how many hits it takes; `when-close`: what it does when the
+     ;; player is near: :chase, :flee, or :either (it picks, each time)
+     :enemies [{:kind :teenager, :x 176, :y 80, :hp 3, :when-close :either}]
      :rows ["TTTTTTT..TTTTTTT"
             "T......==......T"
             "T.f....==....f.T"

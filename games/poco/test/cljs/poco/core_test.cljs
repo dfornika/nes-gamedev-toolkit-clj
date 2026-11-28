@@ -163,7 +163,8 @@
   (testing "everything a character is drawn in is a palette the cartridge has"
     (doseq [kind [:teenager :dad]
             step (range 3)
-            :let [palettes-used (set (for [[_ _ _ p] (art/character-pieces kind step false)] p))]]
+            direction art/directions
+            :let [palettes-used (set (for [[_ _ _ p] (art/character-pieces kind step direction)] (bit-and p 3)))]]
       (is (every? #(< % 4) palettes-used) (str kind step))))
   (testing "no room has two guests"
     (doseq [[room {:keys [npcs enemies]}] world/rooms]
@@ -531,3 +532,41 @@
             [px py] (where m)]
         (is (not (and (<= (Math/abs (- x px)) 9) (<= (Math/abs (- y py)) 5)))
             (str "feet apart: " [x y] [px py]))))))
+
+(defn- near-the-teenager!
+  "A game in the park, the player (30 pixels left, 10 up of the teenager),
+  and the teenager doing `dir` (see :enemy-dir) for 60 frames."
+  [dir]
+  (let [m (doto (game) (harness/poke-at! :items 2r1111))
+        [tx ty] (do (walk-out! m :right 300) (harness/frames! m 3) (teenager-at m))]
+    (harness/poke-at! m (inc (addr m :player/x)) (- tx 30))
+    (harness/poke-at! m (inc (addr m :player/y)) (- ty 10))
+    (harness/poke-at! m (addr m :enemy-dir) dir)
+    (harness/poke-at! m (addr m :enemy-timer) 60)
+    m))
+
+(defn- distance-between [m]
+  (let [[tx ty] (teenager-at m) [px py] (where m)]
+    (+ (Math/abs (- tx px)) (Math/abs (- ty py)))))
+
+(deftest the-teenager-chases-and-flees
+  (testing "chasing, he closes in (but never gets inside the player)"
+    (let [m (near-the-teenager! 5)
+          before (distance-between m)]
+      (harness/frames! m 20)
+      (is (< (distance-between m) (- before 10)))))
+  (testing "fleeing, he gets away"
+    (let [m (near-the-teenager! 6)
+          before (distance-between m)]
+      (harness/frames! m 20)
+      (is (> (distance-between m) (+ before 10)))))
+  (testing "when the player's close he thinks again and does one or the other; far away he wanders"
+    (let [m (near-the-teenager! 4)]
+      (harness/poke-at! m (addr m :enemy-timer) 0)
+      (harness/frame! m)
+      (is (#{5 6} (harness/peek-at m (addr m :enemy-dir)))))
+    (let [m (near-the-teenager! 4)]
+      (harness/poke-at! m (inc (addr m :player/x)) 8)
+      (harness/poke-at! m (addr m :enemy-timer) 0)
+      (harness/frame! m)
+      (is (< (harness/peek-at m (addr m :enemy-dir)) 5)))))

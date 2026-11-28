@@ -116,12 +116,19 @@ character that only uses the player's colors costs nothing. Right now the
 four shared palettes are all spoken for (the importer says what they are),
 and the teenager fits in them, so there's no guest.
 
-**The teenager** (`enemies/poses.edn`): `:stand` is teenager-01, and `:walk` two
-steps facing right (02 and 03), mirrored to go left. How he moves is a handful
-of numbers at the top of `core.cljc` (`enemy-walk-frames`, `enemy-walk-spread`,
-`enemy-pause-odds`, `enemy-walk-every`): he walks one way for a while, or
-stands, and thinks again. He's stunned while he flickers after a hit, can't
-walk through walls or the player, and only moves in the room you're in.
+**The teenager** (`enemies/poses.edn`): a standing picture and two steps for
+each way he faces (right, down, up; left is right mirrored). Three modes: he
+wanders (walks one way for a while, or stands, then thinks again), and when
+the player is within `enemy-notice-range`, he chases or flees, as his
+`:when-close` in `world.cljc` says (`:chase`, `:flee` or `:either`: picks each
+time). The numbers (`enemy-walk-frames`, `enemy-pause-odds`,
+`enemy-alert-frames`...) are at the top of `core.cljc`. He's stunned while he
+flickers after a hit, can't walk through walls or the player, and only moves
+in the room you're in.
+
+The importer reuses a tile that's another one flipped (the sprite attributes
+flip it back), which is what lets all these pictures fit the tiles there's
+room for (256 in all, background and sprites together).
 
 ## In the game
 

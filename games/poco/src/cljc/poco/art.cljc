@@ -42,8 +42,11 @@
                             pose)]))))
 
 (def character-poses
-  "How each enemy and NPC is drawn: {kind {:stand picture}}, from
-  resources/assets/sprites/enemies/poses.edn and npcs/poses.edn."
+  "How each enemy and NPC is drawn: {kind poses}, from
+  resources/assets/sprites/enemies/poses.edn and npcs/poses.edn. `poses` is
+  {:stand picture :walk [pictures]} for someone who looks the same every
+  way, or one of those for each direction (:down :up :left :right; :left
+  may be {:mirror :right})."
   (merge (util/inline-edn-resource "assets/sprites/enemies/poses.edn")
          (util/inline-edn-resource "assets/sprites/npcs/poses.edn")))
 
@@ -94,7 +97,7 @@
   and flipped left to right."
   [pieces width]
   (vec (for [[tile dx dy attributes] pieces]
-         [tile (- width 8 dx) dy (bit-or (or attributes 0) 0x40)])))
+         [tile (- width 8 dx) dy (bit-xor (or attributes 0) 0x40)])))
 
 (defn pieces
   "What to draw for `picture` (a name or [top bottom] from `poses`), mirrored if `flip?`."
@@ -112,31 +115,41 @@
       (flip-pieces found (width found))
       found)))
 
-(defn- character-pose [kind]
-  (or (character-poses kind)
-      (throw (ex-info (str "No pictures for " (pr-str kind) ": see sprites/enemies/poses.edn and npcs/poses.edn") {}))))
+(defn- character-pose
+  "The {:stand :walk :flip?} of a character of `kind` facing `direction`."
+  [kind direction]
+  (let [data (or (character-poses kind)
+                 (throw (ex-info (str "No pictures for " (pr-str kind) ": see sprites/enemies/poses.edn and npcs/poses.edn") {})))]
+    (if (:stand data)
+      data
+      (let [{:keys [mirror] :as pose} (get data direction)]
+        (if mirror
+          (assoc (or (data mirror) (throw (ex-info (str "poses.edn: " (pr-str direction) " mirrors " (pr-str mirror) ", which isn't there") {})))
+                 :flip? true)
+          (or pose (throw (ex-info (str (pr-str kind) " has no pictures facing " (pr-str direction)) {}))))))))
 
 (defn character-pieces
-  "What to draw for an enemy or NPC of `kind` (:teenager, :dad): standing,
-  or (`step` 1, 2, ...) a picture of its :walk if it has one, mirrored
-  if `flip?`."
-  ([kind] (character-pieces kind 0 false))
-  ([kind step flip?]
-   (let [{:keys [stand walk]} (character-pose kind)]
-     (pieces (get (vec (cons stand walk)) step stand) flip?))))
+  "What to draw for an enemy or NPC of `kind` (:teenager, :dad) facing
+  `direction`: standing, or (`step` 1, 2, ...) a picture of its :walk if
+  it has one."
+  ([kind] (character-pieces kind 0 :down))
+  ([kind step direction]
+   (let [{:keys [stand walk flip?]} (character-pose kind direction)]
+     (pieces (get (vec (cons stand walk)) step stand) (boolean flip?)))))
 
 (defn walks?
   "Does a character of this `kind` have pictures of walking?"
   [kind]
-  (boolean (seq (:walk (character-pose kind)))))
+  (boolean (seq (:walk (character-pose kind :down)))))
 
 (defn guests-of
   "The characters whose palettes a character of this `kind` (:teenager,
   :dad) needs loaded: none if every picture of it fits the shared palettes."
   [kind]
-  (let [named (into {} (map (juxt :name :character)) (:frames art))
-        {:keys [stand walk]} (character-pose kind)]
-    (set (for [picture (mapcat #(if (vector? %) % [%]) (cons stand walk))
+  (let [named (into {} (map (juxt :name :character)) (:frames art))]
+    (set (for [direction directions
+               :let [{:keys [stand walk]} (character-pose kind direction)]
+               picture (mapcat #(if (vector? %) % [%]) (cons stand walk))
                :let [who (named picture)]
                :when (contains? guest-palettes who)]
            who))))
