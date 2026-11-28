@@ -92,6 +92,11 @@
   "A power of two, minus 1."
   31)
 
+(def boom-frames-each
+  "How long each of the explosion's four pictures shows, in frames (a
+  power of two: 4 is a quarter of a second for the lot)."
+  4)
+
 (def frames-per-step
   "How many frames of each step of the walking, as a power of two (the
   number of times to halve the frame count): 3 is 8 frames, so a step
@@ -133,6 +138,7 @@
    [:enemy-y [:array (max 1 (count enemies)) :u8] {:doc "Where each enemy is: the top of its picture, in pixels"}]
    [:enemy-dir [:array (max 1 (count enemies)) :u8] {:doc "What each enemy is doing: 0 walking right, 1 left, 2 down, 3 up; 4 standing still; 5 chasing the player; 6 fleeing from them"}]
    [:enemy-timer [:array (max 1 (count enemies)) :u8] {:doc "Frames until each enemy thinks again"}]
+   [:enemy-boom [:array (max 1 (count enemies)) :u8] {:doc "Frames each enemy has left of exploding (it's out of hits, and still being drawn as the explosion)"}]
    [:enemy-face [:array (max 1 (count enemies)) :u8] {:doc "The way each enemy faces, as for :facing"}]
    [:selected :u8 {:doc "The slot the items screen's cursor is on (0 to 7)"}]
    [:redraw :bool {:doc "The words on the items screen need writing"}]])
@@ -266,6 +272,7 @@
       [:lda [:imm y]] [:sta [:+ :enemy-y index]]
       [:lda [:imm 0]] [:sta [:+ :enemy-hurt index]]
       [:sta [:+ :enemy-timer index]]
+      [:sta [:+ :enemy-boom index]]
       [:sta [:+ :enemy-face index]]
       [:lda [:imm 4]] [:sta [:+ :enemy-dir index]]])
    (gen/move :items [:imm menu/starting-bits])
@@ -565,9 +572,16 @@
                   [:cmp [:imm i]]
                   (gen/when-flag :equal
                                  (when-overlapping-enemy index (swing-box direction)
-                                                   [[:dec [:+ :enemy-hp index]]
-                                                    [:lda [:imm hurt-frames]]
-                                                    [:sta [:+ :enemy-hurt index]]]))])))))))
+                                                         [[:dec [:+ :enemy-hp index]]
+                                                          [:lda [:imm hurt-frames]]
+                                                          [:sta [:+ :enemy-hurt index]]
+                                                    ;; out of hits: it explodes
+                                                          [:lda [:+ :enemy-hp index]]
+                                                          (gen/when-flag :zero
+                                                                         [:lda [:imm (* 4 boom-frames-each)]]
+                                                                         [:sta [:+ :enemy-boom index]]
+                                                                         [:lda [:imm 0]]
+                                                                         [:sta [:+ :enemy-hurt index]])]))])))))))
 
 (def swing-stick
   (sub/sub
@@ -729,6 +743,33 @@
       (for [who (enemies-in name)]
         (alive who (move-enemy who)))))))
 
+(defn- explode
+  "Inside `draw-characters`: if enemy number `index` is exploding, draw
+  the next of the explosion's four pictures, over the middle of where it
+  was (a 16x16 picture on a 16x32 body)."
+  [index]
+  (let [boom [:+ :enemy-boom index]
+        done (asm/genlabel "boomed")
+        halvings (count (take-while #(< % boom-frames-each) (iterate #(* 2 %) 1)))]
+    [[:lda boom]
+     (gen/when-flag
+      :not-zero
+      [[:dec boom]
+       [:lda boom]
+       (repeat halvings [:lsr :a])
+       [:lda [:+ :enemy-y index]] [:clc] [:adc [:imm 8]] [:sta :rt/temp]
+       [:lda boom]
+       (repeat halvings [:lsr :a])
+       (for [picture (range 4)
+             :let [next (asm/genlabel "later")]]
+         [[:cmp [:imm (- 3 picture)]]
+          (gen/when-flag :not-zero [:jmp next])
+          (rt/metasprite [:+ :enemy-x index] :rt/temp
+                         (art/pieces (keyword (str "explosion-0" (inc picture))) false))
+          [:jmp done]
+          [:label next]])])
+     [:label done]]))
+
 (def draw-characters
   (sub/sub
    :draw-characters
@@ -742,36 +783,37 @@
             :let [skip (asm/genlabel "unseen")
                   walking (asm/genlabel "walking")
                   drawn (asm/genlabel "drawn")]]
-        (alive who
-               [(when index
-                  [[:lda [:+ :enemy-hurt index]]
-                   (gen/when-flag :not-zero
-                                  [:dec [:+ :enemy-hurt index]]
-                                  [:lda [:+ :enemy-hurt index]]
-                                  [:and [:imm 2]]
-                                  (gen/when-flag :not-zero [:jmp skip]))])
-                (if index
-                  (let [at [[:+ :enemy-x index] [:+ :enemy-y index]]
-                        draw (fn [step direction]
-                               (apply rt/metasprite (concat at [(art/character-pieces kind step direction)])))]
-                    (if (art/walks? kind)
-                      [(for [[i direction] (map-indexed vector art/directions)
-                             :let [next (asm/genlabel "other-way")]]
-                         [[:lda [:+ :enemy-face index]]
-                          [:cmp [:imm i]]
-                          (gen/when-flag :not-zero [:jmp next])
+        [(when index (explode index))
+         (alive who
+                [(when index
+                   [[:lda [:+ :enemy-hurt index]]
+                    (gen/when-flag :not-zero
+                                   [:dec [:+ :enemy-hurt index]]
+                                   [:lda [:+ :enemy-hurt index]]
+                                   [:and [:imm 2]]
+                                   (gen/when-flag :not-zero [:jmp skip]))])
+                 (if index
+                   (let [at [[:+ :enemy-x index] [:+ :enemy-y index]]
+                         draw (fn [step direction]
+                                (apply rt/metasprite (concat at [(art/character-pieces kind step direction)])))]
+                     (if (art/walks? kind)
+                       [(for [[i direction] (map-indexed vector art/directions)
+                              :let [next (asm/genlabel "other-way")]]
+                          [[:lda [:+ :enemy-face index]]
+                           [:cmp [:imm i]]
+                           (gen/when-flag :not-zero [:jmp next])
                           ;; standing still (4), or which of the two steps
-                          [:lda [:+ :enemy-dir index]]
-                          [:cmp [:imm 4]]
-                          (gen/when-flag :equal (draw 0 direction) [:jmp drawn])
-                          [:lda :rt/frame] [:and [:imm 8]]
-                          (gen/if-flag :zero (draw 1 direction) (draw 2 direction))
-                          [:jmp drawn]
-                          [:label next]])
-                       [:label drawn]]
-                      (draw 0 :down)))
-                  (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind)))
-                [:label skip]]))))))
+                           [:lda [:+ :enemy-dir index]]
+                           [:cmp [:imm 4]]
+                           (gen/when-flag :equal (draw 0 direction) [:jmp drawn])
+                           [:lda :rt/frame] [:and [:imm 8]]
+                           (gen/if-flag :zero (draw 1 direction) (draw 2 direction))
+                           [:jmp drawn]
+                           [:label next]])
+                        [:label drawn]]
+                       (draw 0 :down)))
+                   (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind)))
+                 [:label skip]])])))))
 
 (def talk-to
   (sub/sub

@@ -582,3 +582,33 @@
     (is (= (vec (nth (:tiles art/tiles) 5)) (tile 0 5)))
     (is (<= (count (:tiles art/tiles)) 256))
     (is (<= (count sprite-tiles) 256))))
+
+(deftest the-teenager-explodes
+  (let [m (in-the-park! 4 :right)
+        boom (fn [m] (harness/peek-at m (addr m :enemy-boom)))
+        sprites-drawn (fn [m]                 ; sprites in the oam that aren't hidden
+                        (count (filter #(not= 0xFF (harness/peek-at m (+ (addr m :oam) (* 4 %)))) (range 64))))]
+    (dotimes [_ 2] (tap! m :b) (harness/frames! m 24))
+    (is (= 1 (teenager-hp m)))
+    (is (zero? (boom m)) "not yet")
+    (tap! m :b)
+    (harness/frames! m 7)                     ; the stick comes down
+    (is (zero? (teenager-hp m)))
+    (is (pos? (boom m)) "out of hits: exploding")
+    (let [seen (atom #{})]
+      (dotimes [_ 20]
+        (harness/frame! m)
+        (swap! seen conj (boom m)))
+      (is (contains? @seen 0) "it ends")
+      (is (> (count @seen) 10) "it counts down"))
+    (harness/frames! m 5)
+    (is (zero? (boom m)))
+    (is (= 0 (teenager-hp m)))
+    (testing "the sprites of the explosion are drawn while it lasts, and gone after"
+      (let [m (in-the-park! 4 :right)]
+        (dotimes [_ 2] (tap! m :b) (harness/frames! m 24))
+        (tap! m :b)
+        (harness/frames! m 8)
+        (let [during (sprites-drawn m)]
+          (harness/frames! m 30)
+          (is (< (sprites-drawn m) during)))))))
