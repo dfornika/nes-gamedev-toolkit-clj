@@ -112,13 +112,20 @@ room that has that character in it loads them (`:npcs` and `:enemies` in
 `world.cljc`) into the slots after the shared ones. So each room can have one
 guest's colors, not two: the importer says so if a character needs more than
 there's room for, and the game won't build with two guests in a room. A
-character that only uses the player's colors costs nothing. Right now: the
-player has brown/blue/white, dark red/blue/skin and dark red/brown/skin; the
-teenager brings black/green/sickly skin.
+character that only uses the player's colors costs nothing. Right now the
+four shared palettes are all spoken for (the importer says what they are),
+and the teenager fits in them, so there's no guest.
+
+**The teenager** (`enemies/poses.edn`): `:stand` is teenager-01, and `:walk` two
+steps facing right (02 and 03), mirrored to go left. How he moves is a handful
+of numbers at the top of `core.cljc` (`enemy-walk-frames`, `enemy-walk-spread`,
+`enemy-pause-odds`, `enemy-walk-every`): he walks one way for a while, or
+stands, and thinks again. He's stunned while he flickers after a hit, can't
+walk through walls or the player, and only moves in the room you're in.
 
 ## In the game
 
-D-pad: walk. A: read a sign or talk to someone (face them, close up; A or B closes the text). People and the teenager can't be walked through. B: swing the stick (once you've picked it up): it hits what's just in front of you, and the teenager goes after three hits. Start: the items screen (D-pad moves the cursor; Start or B goes back). Select: back to the title.
+D-pad: walk. A: read a sign or talk to someone (face them, close up; A or B closes the text). People and the teenager can't be walked through. B: swing the stick (once you've picked it up): it hits what's just in front of you, and the teenager wanders about, and goes after three hits. Start: the items screen (D-pad moves the cursor; Start or B goes back). Select: back to the title.
 Walk through a gap in the trees into the next room, or into the brick house's door to go inside (and out again through the door at the bottom). There's a stick lying on the floor inside: walk over it to pick it up (then look in the items screen). You start without it; `starting` in `poco.items` says what you begin with. Walking diagonally is no faster than straight: both directions are slowed to 0.7071 (1 / the square root of 2) of the speed.
 
 ## Looking inside

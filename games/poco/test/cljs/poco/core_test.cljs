@@ -158,13 +158,13 @@
   m)
 
 (deftest guests-bring-their-own-sprite-palettes
-  (is (= #{:teenager} (art/guests-of :teenager)) "the teenager's colors aren't the player's")
+  (is (= #{} (art/guests-of :teenager)) "the teenager's colors are all in the player's palettes")
   (is (= #{} (art/guests-of :dad)) "the dad is drawn in the player's, for now")
-  (is (<= (+ art/guest-slot (count (first (vals art/guest-palettes)))) 4) "there's a slot for it")
-  (testing "the teenager's pictures use slot 3 (the guest's) or the player's"
-    (let [palettes-used (set (for [[_ _ _ p] (art/character-pieces :teenager)] p))]
-      (is (contains? palettes-used art/guest-slot))
-      (is (every? #(< % 4) palettes-used))))
+  (testing "everything a character is drawn in is a palette the cartridge has"
+    (doseq [kind [:teenager :dad]
+            step (range 3)
+            :let [palettes-used (set (for [[_ _ _ p] (art/character-pieces kind step false)] p))]]
+      (is (every? #(< % 4) palettes-used) (str kind step))))
   (testing "no room has two guests"
     (doseq [[room {:keys [npcs enemies]}] world/rooms]
       (is (<= (count (distinct (mapcat #(art/guests-of (:kind %)) (concat npcs enemies)))) 1) (str room)))))
@@ -472,3 +472,62 @@
     (is (= (spelled "?????") (:tiles (queued-line m 0))) "the bat isn't there")
     (tap! m :right)
     (is (= (spelled "PIZZA SLICE") (:tiles (queued-line m 0))))))
+
+(defn- teenager-at [m]
+  [(harness/peek-at m (addr m :enemy-x)) (harness/peek-at m (addr m :enemy-y))])
+
+(defn- block-at
+  "The character in the park's map under the pixel [x y]."
+  [[x y]]
+  (get-in (vec (:rows (get (into {} world/rooms) :park))) [(quot y 16) (quot x 16)]))
+
+(deftest the-teenager-wanders
+  (let [m (doto (game) (harness/poke-at! :items 2r1111))
+        start (first (:enemies (get (into {} world/rooms) :park)))]
+    (is (= [(:x start) (:y start)] (teenager-at m)) "he starts where the room puts him")
+    (walk-out! m :right 300)
+    (harness/frames! m 3)
+    (is (= :park (room m)))
+    (harness/poke-at! m (inc (addr m :player/x)) 8)       ; out of his way, by the left gap
+    (harness/poke-at! m (inc (addr m :player/y)) 100)
+    (testing "he moves, and keeps to the floor"
+      (let [seen (atom #{})
+            {:keys [left top right bottom]} poco/feet]
+        (dotimes [_ 1500]
+          (harness/frame! m)
+          (let [[x y :as at] (teenager-at m)]
+            (swap! seen conj at)
+            (doseq [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
+              (is (not (#{\T \~ \S} (block-at [(+ x dx) (+ y dy)]))) (str "in a wall at " at)))))
+        (is (> (count @seen) 100) "he covers some ground")
+        (is (> (count (set (map first @seen))) 20))
+        (is (> (count (set (map second @seen))) 20))))))
+
+(deftest the-teenager-is-stunned-when-hit
+  (let [m (in-the-park! 4 :right)
+        before (teenager-at m)]
+    (tap! m :b)
+    (harness/frames! m 14)
+    (is (= 2 (teenager-hp m)))
+    (let [stunned (set (for [_ (range 10)] (do (harness/frame! m) (teenager-at m))))]
+      (is (= 1 (count stunned)) "he doesn't move while he flickers"))
+    (is (some? before))))
+
+(deftest the-teenager-stays-in-his-room
+  (let [m (game)
+        before (teenager-at m)]
+    (harness/frames! m 300)
+    (is (= :home (room m)))
+    (is (= before (teenager-at m)) "nobody's there to see him")))
+
+(deftest the-teenager-doesnt-walk-through-the-player
+  (let [m (doto (game) (harness/poke-at! :items 2r1111))
+        [tx ty] (do (walk-out! m :right 300) (harness/frames! m 3) (teenager-at m))]
+    (harness/poke-at! m (inc (addr m :player/x)) (- tx 11))
+    (harness/poke-at! m (inc (addr m :player/y)) ty)
+    (dotimes [_ 600]
+      (harness/frame! m)
+      (let [[x y] (teenager-at m)
+            [px py] (where m)]
+        (is (not (and (<= (Math/abs (- x px)) 9) (<= (Math/abs (- y py)) 5)))
+            (str "feet apart: " [x y] [px py]))))))

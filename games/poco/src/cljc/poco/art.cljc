@@ -112,20 +112,31 @@
       (flip-pieces found (width found))
       found)))
 
+(defn- character-pose [kind]
+  (or (character-poses kind)
+      (throw (ex-info (str "No pictures for " (pr-str kind) ": see sprites/enemies/poses.edn and npcs/poses.edn") {}))))
+
 (defn character-pieces
-  "What to draw for an enemy or NPC of `kind` (:teenager, :dad)."
+  "What to draw for an enemy or NPC of `kind` (:teenager, :dad): standing,
+  or (`step` 1, 2, ...) a picture of its :walk if it has one, mirrored
+  if `flip?`."
+  ([kind] (character-pieces kind 0 false))
+  ([kind step flip?]
+   (let [{:keys [stand walk]} (character-pose kind)]
+     (pieces (get (vec (cons stand walk)) step stand) flip?))))
+
+(defn walks?
+  "Does a character of this `kind` have pictures of walking?"
   [kind]
-  (pieces (:stand (or (character-poses kind)
-                      (throw (ex-info (str "No pictures for " (pr-str kind) ": see sprites/enemies/poses.edn and npcs/poses.edn") {}))))
-          false))
+  (boolean (seq (:walk (character-pose kind)))))
 
 (defn guests-of
   "The characters whose palettes a character of this `kind` (:teenager,
   :dad) needs loaded: none if every picture of it fits the shared palettes."
   [kind]
   (let [named (into {} (map (juxt :name :character)) (:frames art))
-        stand (:stand (character-poses kind))]
-    (set (for [picture (if (vector? stand) stand [stand])
+        {:keys [stand walk]} (character-pose kind)]
+    (set (for [picture (mapcat #(if (vector? %) % [%]) (cons stand walk))
                :let [who (named picture)]
                :when (contains? guest-palettes who)]
            who))))
