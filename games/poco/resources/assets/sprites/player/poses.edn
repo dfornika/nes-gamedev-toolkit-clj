@@ -10,14 +10,20 @@
 ;; {:mirror :right} draws the direction as the other one, backwards, so
 ;; side-on art is only needed for one side.
 ;;
+;; :swing is the two pictures of swinging the stick (B), one after the other.
+;;
 ;; The PNGs: 01 stands facing us; 02 and 03 are steps facing right, and 04
 ;; stands facing right; 05 stands facing away, and 06 and 07 are steps facing
-;; away. Facing us, the steps are made from our head with the legs of the
+;; away. 08 and 09 swing facing us, 10 and 11 facing away, 12 and 13 facing
+;; right. Facing us, the steps are made from our head with the legs of the
 ;; steps facing away.
 {:down  {:stand :player-01
-         :walk  [[:player-01 :player-06] :player-01 [:player-01 :player-07] :player-01]}
+         :walk  [[:player-01 :player-06] :player-01 [:player-01 :player-07] :player-01]
+         :swing [:player-08 :player-09]}
  :up    {:stand :player-05
-         :walk  [:player-06 :player-05 :player-07 :player-05]}
+         :walk  [:player-06 :player-05 :player-07 :player-05]
+         :swing [:player-10 :player-11]}
  :right {:stand :player-04
-         :walk  [:player-02 :player-04 :player-03 :player-04]}
+         :walk  [:player-02 :player-04 :player-03 :player-04]
+         :swing [:player-12 :player-13]}
  :left  {:mirror :right}}

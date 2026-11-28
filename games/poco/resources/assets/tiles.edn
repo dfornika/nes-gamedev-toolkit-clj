@@ -7,7 +7,7 @@
 ;; which tile shows through where it would be. (A tile can also be drawn right here,
 ;; with :pixels: see cartridj.assets.) Their order here is their order in the
 ;; cartridge's graphics.
-{:backdrops [:green :light-azure :red :magenta :light-orange :azure :dark-gray :black]
+{:backdrop :green
  ;; the four palettes a room is drawn in, in order: a metatile's :palette is one of these
  :palettes [:grass :trees :water :wood]
 

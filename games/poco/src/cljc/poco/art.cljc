@@ -55,11 +55,17 @@
   palette]."
   (into {} (map (juxt :name :sprites)) (:frames art)))
 
+(def steps
+  "How many pictures a direction has: standing (0), the walk's four (1 to
+  4), then the swing's (5 on)."
+  (let [{:keys [walk swing]} (:down poses)]
+    (+ 1 (count walk) (count swing))))
+
 (defn missing
   "The pictures `poses` names that haven't been imported."
   []
   (->> (vals poses)
-       (mapcat (fn [{:keys [stand walk]}] (cons stand walk)))
+       (mapcat (fn [{:keys [stand walk swing]}] (concat [stand] walk swing)))
        (mapcat #(if (vector? %) % [%]))
        distinct
        (remove frames)
@@ -90,18 +96,21 @@
       found)))
 
 (defn pose-pieces
-  "The pieces for a direction and a step of the walk: step 0 is standing,
-  and 1 to 4 are the walk cycle."
+  "The pieces for a direction and a step: 0 is standing, 1 to 4 the walk
+  cycle, and 5 on the swing of the stick. A picture that hasn't been
+  imported yet is drawn as the direction's standing one."
   [direction step]
-  (let [{:keys [stand walk flip?]} (poses direction)]
-    (pieces (if (zero? step) stand (nth walk (dec step))) flip?)))
+  (let [{:keys [stand walk swing flip?]} (poses direction)
+        picture (nth (concat [stand] walk swing) step)
+        have? (every? frames (if (vector? picture) picture [picture]))]
+    (pieces (if have? picture stand) flip?)))
 
 ;; ---------------------------------------------------------------------------
 ;; The background
 
 (def background
   "The background's drawings, checked (see cartridj.assets):
-  {:backdrops :palettes :metatiles}. In resources/assets/tiles.edn."
+  {:backdrop :palettes :metatiles}. In resources/assets/tiles.edn."
   (let [data (util/inline-edn-resource "assets/tiles.edn")
         sheets (util/inline-edn-resource "assets/sheets.edn")
         colors (assets/palettes (util/inline-edn-resource "assets/palettes.edn") "palettes.edn")]
@@ -175,16 +184,15 @@
 ;; ---------------------------------------------------------------------------
 ;; Colors
 
-(def backgrounds
-  "The backdrop colors that B steps through. Eight, so that `color AND 7`
-  is always a valid index."
-  (mapv palette/color (:backdrops background)))
+(def backdrop
+  "The color behind everything (the grass shows it through)."
+  (palette/color (:backdrop background)))
 
 (def palettes
   "Four background palettes (each three colors besides the backdrop) and
   four for sprites, which are the player's: the importer found them in the
   pictures. Colors are names (see cartridj.palette/colors) or numbers."
   (palette/palettes
-   {:backdrop   (first backgrounds)
+   {:backdrop   backdrop
     :background (mapv (:colors background) (:palettes background))
     :sprites    (:palettes art)}))

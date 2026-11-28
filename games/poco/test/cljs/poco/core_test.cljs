@@ -179,6 +179,31 @@
     (is (= :room (state m)))
     (is (= :home (room m)))))
 
+(deftest swinging-the-stick
+  (testing "without the stick, B does nothing"
+    (let [m (game)]
+      (tap! m :b)
+      (is (zero? (pose m)))))
+  (testing "with it, B swings: the two swing pictures in turn, standing still"
+    (let [m (doto (game) (harness/poke-at! :items 2r1111))
+          start (where m)]
+      (harness/hold! m :b) (harness/frame! m)
+      (harness/hold! m :right)
+      (is (= 5 (pose m)) "the first picture")
+      (let [seen (loop [n 0 seen []]       ; the rest of the swing: 11 frames
+                   (if (= n 11)
+                     seen
+                     (do (harness/frame! m) (recur (inc n) (conj seen (pose m))))))]
+        (is (= #{5 6} (set seen)))
+        (is (= [5 6] (map first (partition-by identity seen))) "one picture, then the other"))
+      (is (= start (where m)) "it didn't walk, though right was held")
+      (harness/hold! m)
+      (harness/frame! m)
+      (is (zero? (pose m)) "standing again")
+      (harness/hold! m :right)
+      (harness/frames! m 4)
+      (is (not= start (where m)) "walks again afterwards"))))
+
 (deftest left-is-right-mirrored
   (is (= (dissoc (art/poses :right) :flip?) (dissoc (art/poses :left) :flip?)))
   (is (:flip? (art/poses :left)))
