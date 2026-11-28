@@ -337,6 +337,52 @@
       (doseq [[name {:keys [to]}] doors]
         (is (= name (get-in doors [to :to])) (str name " -> " to))))))
 
+(defn- blocked-at?
+  "Are the player's feet at x y (which can be off the screen a little, as
+  they're on the way out) in a wall, in `room`?"
+  [room x y]
+  (let [rows (:rows (get (into {} world/rooms) room))
+        kind (fn [px py]
+               (let [c (quot px 16) r (quot py 16)]
+                 (if (or (neg? c) (neg? r) (> c 15) (> r 14))
+                   :empty
+                   (get-in art/metatiles [(get world/legend (get-in rows [r c])) :kind] :empty))))]
+    (boolean (some (fn [[dx dy]] (#{:solid :sign} (kind (+ x dx) (+ y dy))))
+                   [[3 26] [12 26] [3 31] [12 31]]))))
+
+(deftest every-way-out-of-a-room-arrives-somewhere-free
+  (doseq [[a {:keys [exits]}] world/rooms
+          [edge b] exits
+          v (range 0 240)
+          :let [[x y] (case edge :right [240 v] :left [-1 v] :down [v 208] :up [v -12])
+                [ax ay] (case edge :right [2 v] :left [222 v] :down [v 2] :up [v 200])]
+          :when (not (blocked-at? a x y))]
+    (when (blocked-at? b ax ay)
+      (is false (str "leaving " a " " edge " at " v " arrives in a wall of " b)))))
+
+(deftest the-top-of-a-room-is-a-wall-except-at-its-gap
+  (let [m (game)]
+    (harness/poke-at! m (inc (addr m :player/x)) 40)
+    (walk! m :up 120)
+    (is (= :home (room m)) "walking up in the trees")
+    (is (let [y (second (where m))] (or (< y 20) (> y 240))) "...but right up to them (a little off the top of the screen)"))
+  (let [m (game)]
+    (harness/poke-at! m (inc (addr m :player/x)) 116)
+    (walk-out! m :up 200)
+    (harness/frames! m 3)
+    (is (= :river (room m)) "through the gap")))
+
+(deftest the-player-slides-round-a-corner
+  (let [m (game)]
+    ;; the house is the blocks at columns 3 to 6 of rows 4 and 5, from y = 64: walk
+    ;; right at a height where the feet's bottom corner clips it by a few pixels
+    (harness/poke-at! m (inc (addr m :player/x)) 30)
+    (harness/poke-at! m (inc (addr m :player/y)) 36)
+    (walk! m :right 40)
+    (let [[x y] (where m)]
+      (is (> x 60) "slid past instead of sticking")
+      (is (<= y 33) "nudged up to clear it"))))
+
 (defn- selected [m] (harness/peek-at m :selected))
 
 (defn- open-items [m]
