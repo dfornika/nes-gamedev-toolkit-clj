@@ -83,7 +83,7 @@
 
 (deftest a-teenager-stands-in-the-park
   (let [{:keys [x y]} (first (:enemies (get (into {} world/rooms) :park)))
-        pieces (art/enemy-pieces :teenager)
+        pieces (art/character-pieces :teenager)
         player-pieces (count (art/pose-pieces :down 0))
         sprites-after-the-player (fn [m n]
                                    (for [i (range player-pieces (+ player-pieces n))]
@@ -156,6 +156,34 @@
   (walk-out! m :up 80)
   (harness/frames! m 3)
   m)
+
+(deftest the-dad-can-be-talked-to
+  (let [m (inside-the-house! (game))
+        {:keys [x y]} (first (:npcs (get (into {} world/rooms) :house)))
+        [px py] (where m)]
+    (is (= [120 176] [px py]) "arrived at the door")
+    (walk! m :up 30)                                ; level with him
+    (let [[_ y1] (where m)]
+      (is (< (- y 8) y1 (+ y 8)) "level with the dad"))
+    (walk! m :left 80)                              ; ...and walk into him
+    (let [[x1 _] (where m)]
+      (is (> x1 (+ x 9)) "he's in the way: the player's feet stop before his")
+      (is (< x1 (+ x 40)) "but only just"))
+    (is (= :left (facing m)))
+    (testing "A talks to him, and A closes the box"
+      (tap! m :a)
+      (harness/frames! m 3)
+      (is (= :talk (state m)))
+      (is (= (talk/number [:npc :house :dad]) (harness/peek-at m :message)))
+      (tap! m :a)
+      (harness/frames! m 3)
+      (is (= :room (state m))))
+    (testing "from further away, A does nothing"
+      (walk! m :right 20)
+      (harness/hold! m :left) (harness/frame! m) (harness/hold! m)
+      (tap! m :a)
+      (harness/frames! m 3)
+      (is (= :room (state m))))))
 
 (deftest an-item-lying-about-can-be-picked-up
   (let [m (inside-the-house! (game))

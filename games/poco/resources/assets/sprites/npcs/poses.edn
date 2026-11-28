@@ -1,0 +1,7 @@
+;; How each person is drawn (see enemies/poses.edn): a PNG's name, from any
+;; of the sprites folders.
+;;
+;; PLACEHOLDER: the dad looks like the player (player-01) until his own
+;; pictures are drawn and imported (see Colors of the sprites in the README:
+;; the four sprite palettes are all spoken for).
+{:dad {:stand :player-01}}

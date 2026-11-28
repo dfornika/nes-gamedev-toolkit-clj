@@ -41,10 +41,11 @@
                                    :flip? true)
                             pose)]))))
 
-(def enemy-poses
-  "How each enemy is drawn: {kind {:stand picture}}, from
-  resources/assets/sprites/enemies/poses.edn."
-  (util/inline-edn-resource "assets/sprites/enemies/poses.edn"))
+(def character-poses
+  "How each enemy and NPC is drawn: {kind {:stand picture}}, from
+  resources/assets/sprites/enemies/poses.edn and npcs/poses.edn."
+  (merge (util/inline-edn-resource "assets/sprites/enemies/poses.edn")
+         (util/inline-edn-resource "assets/sprites/npcs/poses.edn")))
 
 (def directions
   "The numbers the game keeps for the way the player faces."
@@ -100,11 +101,11 @@
       (flip-pieces found (width found))
       found)))
 
-(defn enemy-pieces
-  "What to draw for an enemy of `kind` (:teenager)."
+(defn character-pieces
+  "What to draw for an enemy or NPC of `kind` (:teenager, :dad)."
   [kind]
-  (pieces (:stand (or (enemy-poses kind)
-                      (throw (ex-info (str "enemies/poses.edn has no " (pr-str kind)) {}))))
+  (pieces (:stand (or (character-poses kind)
+                      (throw (ex-info (str "No pictures for " (pr-str kind) ": see sprites/enemies/poses.edn and npcs/poses.edn") {}))))
           false))
 
 (defn pose-pieces
