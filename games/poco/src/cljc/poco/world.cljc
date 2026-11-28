@@ -78,6 +78,7 @@
 
    [:park
     {:exits {:left :home, :up :woods}
+     :enemies [{:kind :teenager, :x 176, :y 80}]
      :rows ["TTTTTTT..TTTTTTT"
             "T......==......T"
             "T.f....==....f.T"

@@ -186,17 +186,21 @@
      :frames out}))
 
 (defn- pictures
-  "The PNG files in `dir`, sorted by name; or just the ones named in
-  `only` (names, with or without .png)."
+  "The PNG files in `dir` (or each of the directories `dir` is a collection
+  of, in turn), sorted by name in each; or just the ones named in `only`
+  (names, with or without .png)."
   [dir only]
-  (let [files (->> (.listFiles (io/file dir))
-                   (filter #(str/ends-with? (.getName %) ".png"))
-                   (sort-by #(.getName %)))
+  (let [dirs (if (coll? dir) dir [dir])
+        files (->> dirs
+                   (mapcat (fn [dir]
+                             (->> (.listFiles (io/file dir))
+                                  (filter #(str/ends-with? (.getName %) ".png"))
+                                  (sort-by #(.getName %))))))
         wanted (when only (set (map #(str/replace (name %) #"\.png$" "") only)))]
     (if wanted
       (let [found (filter #(wanted (str/replace (.getName %) #"\.png$" "")) files)]
         (when (not= (count found) (count wanted))
-          (throw (ex-info (str "Not all of " (pr-str only) " are in " dir) {})))
+          (throw (ex-info (str "Not all of " (pr-str only) " are in " (pr-str dir)) {})))
         found)
       files)))
 
@@ -208,7 +212,9 @@
        " :frames\n [" (str/join "\n  " (map pr-str frames)) "]}\n"))
 
 (defn import!
-  "Read the pictures in `dir`, and write the art for a game to `out`.
+  "Read the pictures in `dir` (a directory, or a collection of them: the
+  characters share the sprite palettes and tiles), and write the art for a
+  game to `out`.
   Options: :only (just these pictures, by name), and the options of
   `read-frame` and `build`. Returns what it wrote. Throws, with everything
   that's wrong with the pictures, if they can't be used."

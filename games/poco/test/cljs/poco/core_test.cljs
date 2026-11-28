@@ -81,6 +81,23 @@
     (is (= (sort (map (fn [[_ _ dx dy]] [(+ y dy) (+ x dx)]) (map (fn [[t dx dy p]] [t p dx dy]) (art/pose-pieces :down 0))))
            (sort (map (fn [[y _ _ x]] [y x]) sprites))))))
 
+(deftest a-teenager-stands-in-the-park
+  (let [{:keys [x y]} (first (:enemies (get (into {} world/rooms) :park)))
+        pieces (art/enemy-pieces :teenager)
+        player-pieces (count (art/pose-pieces :down 0))
+        sprites-after-the-player (fn [m n]
+                                   (for [i (range player-pieces (+ player-pieces n))]
+                                     (mapv #(harness/peek-at m (+ (addr m :oam) (* 4 i) %)) [0 1 2 3])))]
+    (testing "not in the first room"
+      (is (every? #(= 0xFF (first %)) (sprites-after-the-player (game) (count pieces)))))
+    (testing "in the park, where the room puts them"
+      (let [m (game)]
+        (walk-out! m :right 300)
+        (harness/frames! m 3)
+        (is (= :park (room m)))
+        (is (= (sort (for [[_ dx dy] pieces] [(+ y dy) (+ x dx)]))
+               (sort (map (fn [[sy _ _ sx]] [sy sx]) (sprites-after-the-player m (count pieces))))))))))
+
 (deftest walls-stop-the-player
   (let [m (game)]
     (walk! m :left 80)

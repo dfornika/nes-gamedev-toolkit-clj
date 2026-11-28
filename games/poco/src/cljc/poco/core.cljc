@@ -350,6 +350,16 @@
                       (gen/move :walk [:imm 0])
                       (gen/move :pose [:imm 5]))]))]))
 
+(def draw-enemies
+  (sub/sub
+   :draw-enemies
+   "Draw the enemies of the room (:enemies in poco.world), standing where
+  the room puts them. They don't move or do anything yet."
+   (by-room
+    (fn [name]
+      (for [{:keys [kind x y]} (:enemies (get (into {} world/rooms) name))]
+        (rt/metasprite [:imm x] [:imm y] (art/enemy-pieces kind)))))))
+
 (def draw-player
   (sub/sub
    :draw-player
@@ -548,6 +558,7 @@
             (call pick-up)
             (call read-sign)
             (call draw-player)
+            (call draw-enemies)
             (rt/when-pressed :start (rt/transition :items))
             (rt/when-pressed :select (rt/transition :title))]})
 
