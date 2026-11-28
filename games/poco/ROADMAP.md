@@ -43,8 +43,8 @@ Each of these uses what's there:
    goes bang.
 3. **Hearts.** A health variable, shown at the top of the screen, and a way to
    take damage. This needs a status bar: sprites for the hearts to start with.
-4. **Teenagers.** An enemy that wanders, and chases when the player is close.
-   Objects (`cartridj.objects`) are what to build on.
+4. **Teenagers.** *Started*: he wanders (walks, pauses, thinks again at
+   random), chases or flees when the player is close, and is stunned when hit. Still to do: knock-back, hurting the player, more than one of them.
 5. **Pickups beyond the stick.** The mechanism is there (`:pickup` in a
    room). Items need colors that suit where they lie (see `art/stick-on-floor`,
    which only works because the stick's colors are the floor's), or to be

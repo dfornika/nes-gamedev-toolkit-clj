@@ -1,4 +1,9 @@
 ;; How each enemy is drawn: a PNG's name (:teenager-01 is the file
-;; teenager-01.png, in this folder), as in player/poses.edn. So far they only
-;; stand, and face one way.
-{:teenager {:stand :teenager-01}}
+;; teenager-01.png, in this folder), as in player/poses.edn.
+;;
+;; For each direction he faces, :stand is the picture for standing and :walk
+;; two pictures of a step, one after the other. Left is right mirrored.
+{:teenager {:right {:stand :teenager-01 :walk [:teenager-02 :teenager-03]}
+            :down  {:stand :teenager-04 :walk [:teenager-05 :teenager-06]}
+            :up    {:stand :teenager-07 :walk [:teenager-08 :teenager-09]}
+            :left  {:mirror :right}}}

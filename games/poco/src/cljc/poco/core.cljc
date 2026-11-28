@@ -55,6 +55,43 @@
   "How long an enemy flickers after a hit."
   20)
 
+(def enemy-walk-frames
+  "How long an enemy walks one way before it thinks again: this many
+  frames, plus a random number up to `enemy-walk-spread`. At a pixel a
+  frame (a bit slower than the player), 24 to 87 frames is 24 to 87 pixels."
+  24)
+
+(def enemy-walk-spread
+  "The most frames added to `enemy-walk-frames`, less one: a power of two,
+  minus 1 (63 is 64 possible numbers)."
+  63)
+
+(def enemy-pause-odds
+  "An enemy that's thought again stands still instead of walking one time
+  in this many (2 or 4: a half or a quarter of the time). A pause lasts
+  as long as a walk."
+  4)
+
+(def enemy-walk-every
+  "An enemy moves a pixel every this many frames (a power of two: 1 is
+  every frame, 2 every other). The player moves 1.5 pixels a frame."
+  1)
+
+(def enemy-notice-range
+  "How close the player has to be, in pixels (along each way), for an
+  enemy to notice them: then, when it thinks again, it chases or flees
+  (see :when-close in poco.world) instead of wandering."
+  56)
+
+(def enemy-alert-frames
+  "How long it chases or flees before thinking again: this many frames,
+  plus a random number up to `enemy-alert-spread`."
+  30)
+
+(def enemy-alert-spread
+  "A power of two, minus 1."
+  31)
+
 (def frames-per-step
   "How many frames of each step of the walking, as a power of two (the
   number of times to halve the frame count): 3 is 8 frames, so a step
@@ -91,7 +128,12 @@
     {:doc "The items the player has: a bit each, in the order of poco.items"}]
    [:message :u8 {:doc "Which of poco.talk's messages to show"}]
    [:enemy-hp [:array (max 1 (count enemies)) :u8] {:doc "Hits each enemy has left (0: gone), as numbered in `enemies`"}]
-   [:enemy-hurt [:array (max 1 (count enemies)) :u8] {:doc "Frames each enemy has left of flickering after a hit"}]
+   [:enemy-hurt [:array (max 1 (count enemies)) :u8] {:doc "Frames each enemy has left of flickering after a hit (it stands stunned meanwhile)"}]
+   [:enemy-x [:array (max 1 (count enemies)) :u8] {:doc "Where each enemy is: the left of its picture, in pixels"}]
+   [:enemy-y [:array (max 1 (count enemies)) :u8] {:doc "Where each enemy is: the top of its picture, in pixels"}]
+   [:enemy-dir [:array (max 1 (count enemies)) :u8] {:doc "What each enemy is doing: 0 walking right, 1 left, 2 down, 3 up; 4 standing still; 5 chasing the player; 6 fleeing from them"}]
+   [:enemy-timer [:array (max 1 (count enemies)) :u8] {:doc "Frames until each enemy thinks again"}]
+   [:enemy-face [:array (max 1 (count enemies)) :u8] {:doc "The way each enemy faces, as for :facing"}]
    [:selected :u8 {:doc "The slot the items screen's cursor is on (0 to 7)"}]
    [:redraw :bool {:doc "The words on the items screen need writing"}]])
 
@@ -218,9 +260,14 @@
    (gen/move :walk [:imm 0])
    (gen/move :pose [:imm 0])
    (gen/move :swing [:imm 0])
-   (for [{:keys [index hp]} enemies]
+   (for [{:keys [index hp x y]} enemies]
      [[:lda [:imm hp]] [:sta [:+ :enemy-hp index]]
-      [:lda [:imm 0]] [:sta [:+ :enemy-hurt index]]])
+      [:lda [:imm x]] [:sta [:+ :enemy-x index]]
+      [:lda [:imm y]] [:sta [:+ :enemy-y index]]
+      [:lda [:imm 0]] [:sta [:+ :enemy-hurt index]]
+      [:sta [:+ :enemy-timer index]]
+      [:sta [:+ :enemy-face index]]
+      [:lda [:imm 4]] [:sta [:+ :enemy-dir index]]])
    (gen/move :items [:imm menu/starting-bits])
    (gen/move :selected [:imm 0])])
 
@@ -246,6 +293,26 @@
      then
      [:label apart]]))
 
+(defn- offset-within
+  "Branch to `no` unless `a` minus `b` (one-byte operands: positions on
+  the screen) is from `lo` to `hi`."
+  [a b lo hi no]
+  [(gen/with-operand :lda a) [:sec] (gen/with-operand :sbc b)
+   [:clc] [:adc [:imm (bit-and (- lo) 0xFF)]]
+   [:cmp [:imm (inc (- hi lo))]] [:bcs no]])
+
+(defn- when-overlapping-enemy
+  "Run `then` if the player's box [left top right bottom] (as for
+  `when-overlapping`) overlaps the feet of enemy number `index`, wherever
+  it is now."
+  [index [x1 y1 x2 y2] then]
+  (let [apart (asm/genlabel "clear")
+        {:keys [left top right bottom]} feet]
+    [(offset-within [:+ :enemy-x index] (gen/whole :player/x) (- x1 right) (- x2 left) apart)
+     (offset-within [:+ :enemy-y index] (gen/whole :player/y) (- y1 bottom) (- y2 top) apart)
+     then
+     [:label apart]]))
+
 (defn- feet-of
   "The box of a character's feet: where it bumps into things."
   [{:keys [x y]}]
@@ -265,7 +332,9 @@
          (rt/on-kinds [:solid :sign] [[:jmp hit]])])
       (by-room (fn [name]
                  (for [who (standing-in name)]
-                   (alive who (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]])))))
+                   (alive who (if-let [index (:index who)]
+                                (when-overlapping-enemy index [left top right bottom] [[:jmp hit]])
+                                (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]]))))))
       [:lda [:imm 0]]
       [:jmp done]
       [:label hit]
@@ -495,7 +564,7 @@
                  [[:lda :facing]
                   [:cmp [:imm i]]
                   (gen/when-flag :equal
-                                 (when-overlapping (swing-box direction) (feet-of who)
+                                 (when-overlapping-enemy index (swing-box direction)
                                                    [[:dec [:+ :enemy-hp index]]
                                                     [:lda [:imm hurt-frames]]
                                                     [:sta [:+ :enemy-hurt index]]]))])))))))
@@ -530,16 +599,149 @@
                       (gen/move :walk [:imm 0])
                       (gen/move :pose [:imm 5]))]))]))
 
+(defn- enemy-step
+  "Inside `move-enemy`: enemy number `index` takes a pixel's step along
+  `axis` (:enemy-x or :enemy-y), `more?` (right or down) or not. It goes
+  back if that's off the room, in something solid, or into the player."
+  [index axis more?]
+  (let [cell [:+ axis index]
+        {:keys [left top right bottom]} feet
+        blocked (asm/genlabel "blocked")
+        ok (asm/genlabel "moved")]
+    [[(if more? :inc :dec) cell]
+     [:lda cell]
+     [:cmp [:imm (if (= axis :enemy-x) 224 208)]] ; (walking off 0 wraps round to 255)
+     (gen/when-flag :carry [:jmp blocked])
+     (for [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
+       [(rt/probe [:+ :enemy-x index] dx [:+ :enemy-y index] dy)
+        (rt/on-kinds [:solid :sign] [[:jmp blocked]])])
+     (when-overlapping-enemy index [left top right bottom] [[:jmp blocked]])
+     [:jmp ok]
+     [:label blocked]
+     [(if more? :dec :inc) cell]
+     [:label ok]]))
+
+(defn- face
+  "Inside `move-enemy`: enemy number `index` now faces `direction`."
+  [index direction]
+  [[:lda [:imm (.indexOf art/directions direction)]]
+   [:sta [:+ :enemy-face index]]])
+
+(defn- toward-player
+  "Inside `move-enemy`: a step along `axis` (:enemy-x or :enemy-y) towards
+  the player, or (`away?`) away from them: nothing if it's level with them."
+  [index axis away?]
+  (let [mine [:+ axis index]
+        theirs (gen/whole (if (= axis :enemy-x) :player/x :player/y))
+        [inc-dir dec-dir] (if (= axis :enemy-x) [:right :left] [:down :up])
+        done (asm/genlabel "level")
+        go (fn [more? direction] [(face index direction) (enemy-step index axis more?)])]
+    [(gen/with-operand :lda mine)
+     (gen/with-operand :cmp theirs)
+     (gen/when-flag :equal [:jmp done])
+     ;; carry: it's past the player (bigger)
+     (gen/if-flag :carry
+                  (go away? (if away? inc-dir dec-dir))
+                  (go (not away?) (if away? dec-dir inc-dir)))
+     [:label done]]))
+
+(defn- move-enemy
+  "Inside `move-enemies`: what enemy number `index` does this frame. If
+  it's not stunned, it's doing something (`enemy-dir`): walking a way,
+  standing, chasing the player or fleeing from them, a pixel at a time,
+  until its timer runs out. Then it thinks again: if the player is close
+  (`enemy-notice-range`) it chases or flees (its :when-close), and if not
+  it picks a way to walk, or to stand, at random."
+  [{:keys [index when-close]}]
+  (let [done (asm/genlabel "enemy-done")
+        far (asm/genlabel "far")
+        thought (asm/genlabel "thought")
+        timer [:+ :enemy-timer index]
+        dir [:+ :enemy-dir index]
+        r enemy-notice-range
+        pause-mask (* (dec enemy-pause-odds) 0x40)]
+    [[:lda [:+ :enemy-hurt index]]
+     (gen/when-flag :not-zero [:jmp done])
+     [:lda timer]
+     (gen/if-flag
+      :zero
+      [(offset-within [:+ :enemy-x index] (gen/whole :player/x) (- r) r far)
+       (offset-within [:+ :enemy-y index] (gen/whole :player/y) (- r) r far)
+       ;; close: chase (5) or flee (6)
+       (case (or when-close :either)
+         :chase [:lda [:imm 5]]
+         :flee  [:lda [:imm 6]]
+         :either [(call rt/random) [:and [:imm 1]] [:clc] [:adc [:imm 5]]])
+       [:sta dir]
+       (call rt/random)
+       [:and [:imm enemy-alert-spread]]
+       [:clc] [:adc [:imm enemy-alert-frames]]
+       [:sta timer]
+       [:jmp thought]
+       [:label far]
+       ;; far: a pause, or a way to walk
+       (call rt/random)
+       [:and [:imm pause-mask]]
+       [:cmp [:imm pause-mask]]
+       (gen/if-flag :equal
+                    [:lda [:imm 4]]
+                    [[(call rt/random)] [:and [:imm 3]]])
+       [:sta dir]
+       (call rt/random)
+       [:and [:imm enemy-walk-spread]]
+       [:clc] [:adc [:imm enemy-walk-frames]]
+       [:sta timer]
+       [:label thought]]
+      [:dec timer])
+     [:lda dir]
+     [:cmp [:imm 4]]
+     (gen/when-flag :equal [:jmp done])
+     (when (> enemy-walk-every 1)
+       [[:lda :rt/frame] [:and [:imm (dec enemy-walk-every)]]
+        (gen/when-flag :not-zero [:jmp done])])
+     [:lda dir]
+     [:cmp [:imm 5]]
+     (gen/if-flag
+      :carry
+      ;; chasing (5) or fleeing (6)
+      [[:lda dir] [:cmp [:imm 6]]
+       (gen/if-flag :equal
+                    [(toward-player index :enemy-x true) (toward-player index :enemy-y true)]
+                    [(toward-player index :enemy-x false) (toward-player index :enemy-y false)])]
+      (for [[i [axis more? direction]] (map-indexed vector [[:enemy-x true :right] [:enemy-x false :left]
+                                                            [:enemy-y true :down] [:enemy-y false :up]])
+            :let [next (asm/genlabel "not-this-way")]]
+        [[:lda dir]
+         [:cmp [:imm i]]
+         (gen/when-flag :not-zero [:jmp next])
+         (face index direction)
+         (enemy-step index axis more?)
+         [:jmp done]
+         [:label next]]))
+     [:label done]]))
+
+(def move-enemies
+  (sub/sub
+   :move-enemies
+   "Enemies that are in the room and not stunned walk about: see `move-enemy`."
+   (by-room
+    (fn [name]
+      (for [who (enemies-in name)]
+        (alive who (move-enemy who)))))))
+
 (def draw-characters
   (sub/sub
    :draw-characters
    "Draw the people and enemies of the room (:npcs and :enemies in
-  poco.world), standing where the room puts them: not the enemies that are
-  out of hits, and one that's just been hit flickers. They don't move yet."
+  poco.world): not the enemies that are out of hits, and one that's just
+  been hit flickers. An enemy that's walking takes steps (facing the way it
+  last went, left or right); the people stand where the room puts them."
    (by-room
     (fn [name]
       (for [{:keys [kind x y index] :as who} (standing-in name)
-            :let [skip (asm/genlabel "unseen")]]
+            :let [skip (asm/genlabel "unseen")
+                  walking (asm/genlabel "walking")
+                  drawn (asm/genlabel "drawn")]]
         (alive who
                [(when index
                   [[:lda [:+ :enemy-hurt index]]
@@ -548,7 +750,27 @@
                                   [:lda [:+ :enemy-hurt index]]
                                   [:and [:imm 2]]
                                   (gen/when-flag :not-zero [:jmp skip]))])
-                (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind))
+                (if index
+                  (let [at [[:+ :enemy-x index] [:+ :enemy-y index]]
+                        draw (fn [step direction]
+                               (apply rt/metasprite (concat at [(art/character-pieces kind step direction)])))]
+                    (if (art/walks? kind)
+                      [(for [[i direction] (map-indexed vector art/directions)
+                             :let [next (asm/genlabel "other-way")]]
+                         [[:lda [:+ :enemy-face index]]
+                          [:cmp [:imm i]]
+                          (gen/when-flag :not-zero [:jmp next])
+                          ;; standing still (4), or which of the two steps
+                          [:lda [:+ :enemy-dir index]]
+                          [:cmp [:imm 4]]
+                          (gen/when-flag :equal (draw 0 direction) [:jmp drawn])
+                          [:lda :rt/frame] [:and [:imm 8]]
+                          (gen/if-flag :zero (draw 1 direction) (draw 2 direction))
+                          [:jmp drawn]
+                          [:label next]])
+                       [:label drawn]]
+                      (draw 0 :down)))
+                  (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind)))
                 [:label skip]]))))))
 
 (def talk-to
@@ -764,7 +986,8 @@
 (def title
   {:enter  [(rt/draw-screen (world-palettes) (rt/background :title))]
    :update [(rt/when-pressed :start
-                             [start-game
+                             [(rt/stir-random)
+                              start-game
                               (rt/transition :room)])]})
 
 (def room
@@ -778,6 +1001,7 @@
             (call read-sign)
             (call draw-player)
             (call talk-to)
+            (call move-enemies)
             (call draw-characters)
             (rt/when-pressed :start (rt/transition :items))
             (rt/when-pressed :select (rt/transition :title))]})
