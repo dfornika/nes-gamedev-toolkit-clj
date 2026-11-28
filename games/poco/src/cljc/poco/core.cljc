@@ -164,9 +164,43 @@
    (gen/move :items [:imm menu/starting-bits])
    (gen/move :selected [:imm 0])])
 
+(defn- standing-in
+  "The characters (:npcs and :enemies) of the room called `name`."
+  [name]
+  (let [room (get (into {} world/rooms) name)]
+    (concat (:npcs room) (:enemies room))))
+
+(defn- within
+  "Branch to `no` unless the byte at `src` is from `lo` to `hi`."
+  [src lo hi no]
+  (let [lo (max lo 0)
+        hi (min hi 255)]
+    (if (> lo hi)
+      [[:jmp no]]
+      [(gen/with-operand :lda src)
+       (when (pos? lo) [[:cmp [:imm lo]] [:bcc no]])
+       (when (< hi 255) [[:cmp [:imm (inc hi)]] [:bcs no]])])))
+
+(defn- when-overlapping
+  "Run `then` if the player's box [left top right bottom] (pixels from the
+  top left of their picture) overlaps `target`, a box on the screen. (The
+  same test a swing of the stick will use for what it hits.)"
+  [[left top right bottom] [x1 y1 x2 y2] then]
+  (let [apart (asm/genlabel "apart")]
+    [(within (gen/whole :player/x) (- x1 right) (- x2 left) apart)
+     (within (gen/whole :player/y) (- y1 bottom) (- y2 top) apart)
+     then
+     [:label apart]]))
+
+(defn- feet-of
+  "The box of a character's feet: where it bumps into things."
+  [{:keys [x y]}]
+  (let [{:keys [left top right bottom]} feet]
+    [(+ x left) (+ y top) (+ x right) (+ y bottom)]))
+
 (defn- on-feet-solid
   "Run `then` if any corner of the player's feet is in something solid,
-  otherwise `else`."
+  or in a character standing in the room, otherwise `else`."
   [then else]
   (let [hit (asm/genlabel "bumped")
         done (asm/genlabel "free")
@@ -174,6 +208,9 @@
     [(for [[dx dy] [[left top] [right top] [left bottom] [right bottom]]]
        [(rt/probe (gen/whole :player/x) dx (gen/whole :player/y) dy)
         (rt/on-kinds [:solid :sign] [[:jmp hit]])])
+     (by-room (fn [name]
+                (for [who (standing-in name)]
+                  (when-overlapping [left top right bottom] (feet-of who) [[:jmp hit]]))))
      else
      [:jmp done]
      [:label hit]
@@ -350,15 +387,43 @@
                       (gen/move :walk [:imm 0])
                       (gen/move :pose [:imm 5]))]))]))
 
-(def draw-enemies
+(def draw-characters
   (sub/sub
-   :draw-enemies
-   "Draw the enemies of the room (:enemies in poco.world), standing where
-  the room puts them. They don't move or do anything yet."
+   :draw-characters
+   "Draw the people and enemies of the room (:npcs and :enemies in
+  poco.world), standing where the room puts them. They don't move yet."
    (by-room
     (fn [name]
-      (for [{:keys [kind x y]} (:enemies (get (into {} world/rooms) name))]
-        (rt/metasprite [:imm x] [:imm y] (art/enemy-pieces kind)))))))
+      (for [{:keys [kind x y]} (standing-in name)]
+        (rt/metasprite [:imm x] [:imm y] (art/character-pieces kind)))))))
+
+(def talk-to
+  (sub/sub
+   :talk-to
+   "A talks to someone: if the player faces a character that has something
+  to say (the :says of an :npc in poco.world), close enough, the game says
+  it."
+   (let [done (asm/genlabel "talked")
+         {:keys [left top right bottom]} feet
+         reach 4
+         ahead {:down  [left top right (+ bottom reach)] :up    [left (- top reach) right bottom]
+                :left  [(- left reach) top right bottom] :right [left top (+ right reach) bottom]}]
+     (rt/when-pressed
+      :a
+      [(for [[i direction] (map-indexed vector art/directions)]
+         [[:lda :facing]
+          [:cmp [:imm i]]
+          (gen/when-flag :equal
+                         (by-room
+                          (fn [name]
+                            (for [{:keys [kind says] :as who} (:npcs (get (into {} world/rooms) name))
+                                  :when says]
+                              (when-overlapping (ahead direction) (feet-of who)
+                                                [(gen/move :message [:imm (talk/number [:npc name kind])])
+                                                 (rt/transition :talk)
+                                                 [:jmp done]]))))
+                         [:jmp done])])
+       [:label done]]))))
 
 (def draw-player
   (sub/sub
@@ -558,7 +623,8 @@
             (call pick-up)
             (call read-sign)
             (call draw-player)
-            (call draw-enemies)
+            (call talk-to)
+            (call draw-characters)
             (rt/when-pressed :start (rt/transition :items))
             (rt/when-pressed :select (rt/transition :title))]})
 

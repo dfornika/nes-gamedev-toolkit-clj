@@ -26,9 +26,13 @@ see "Assets as data" and "The asset pipeline" in the toolkit's roadmap.
 
 Each of these uses what's there:
 
-1. **NPCs to talk to.** Standing characters (sprites, drawn over the room)
-   that say something when faced and A is pressed: the text box and the
-   `:sign` machinery, with the character's position kept in the room's data.
+1. **NPCs to talk to.** *Started*: a room's `:npcs` stand there, can't be
+   walked through, and say two lines when faced and A is pressed (the dad in
+   the house, drawn as the player for now). Still to do: their own art, which
+   needs **sprite palettes per room** (the player takes three of the four, so
+   each room can bring one palette of its own for the people in it: see
+   "Colors of the sprites" in the README); a longer talk than two lines; and
+   the dad giving the wooden sword.
 2. **Using an item.** B swings the stick already (the swing is two pictures per
    direction: `poses.edn`), but it doesn't hit anything yet: that wants
    something to hit, and a probe in front of the player, like reading a sign.

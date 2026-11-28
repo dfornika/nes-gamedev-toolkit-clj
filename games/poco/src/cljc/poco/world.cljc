@@ -12,6 +12,10 @@
   A door takes you inside (or back out): `:door` says where to, and where
   you appear there. Walk into any `d` block.
 
+  `:npcs` are people standing in a room, who talk when faced and A is
+  pressed; `:enemies` stand there too (and will do more). Neither can be
+  walked through.
+
   Walk off the edge of a room, through a gap in its border, and you're in
   the room that's on that side: `:exits` says which. (The gaps and the
   exits have to match up: leave a gap with no exit, and you just can't walk
@@ -60,6 +64,10 @@
     {:door {:to :home, :x 72, :y 76, :facing :down}
      ;; the item lying in the room, and which block it's in (column, row)
      :pickup {:item :stick, :at [11 6]}
+     ;; someone to talk to: `kind` says which picture (sprites/npcs/poses.edn), x and y
+     ;; where (the top left of their 16x32), and `says` what they say (two lines)
+     :npcs [{:kind :dad, :x 40, :y 130
+             :says ["HELLO SON!" "WATCH OUT FOR TEENAGERS!"]}]
      :rows ["################"
             "#______________#"
             "#_##___________#"
