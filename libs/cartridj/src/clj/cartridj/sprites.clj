@@ -173,6 +173,15 @@
   (let [digit (into {transparent \.} (map vector palette "123"))]
     (mapv #(apply str (map digit %)) colors)))
 
+(defn- flipped
+  "The drawing `d` and its mirror images, with the sprite attribute bits
+  that draw each back as `d`: [[0 d] ...]. Tried in order, so a drawing
+  stays as it is when it can."
+  [d]
+  (let [across (fn [d] (mapv #(apply str (reverse %)) d))
+        down (fn [d] (vec (reverse d)))]
+    [[0 d] [0x40 (across d)] [0x80 (down d)] [0xC0 (across (down d))]]))
+
 (defn build
   "Work out the palettes, tiles and frames from `frames` (as from
   `read-frame`), or throw an ex-info that says everything that's wrong
@@ -208,7 +217,8 @@
             (throw (ex-info (str "The palettes " (pr-str palettes) " don't cover the pictures:\n  "
                                  (str/join "\n  " unplaced))
                             {:problems (vec unplaced)})))
-        ;; give each distinct drawing a number, in the order they turn up
+        ;; give each distinct drawing a number, in the order they turn up: a
+        ;; drawing that's another one flipped is that one, drawn flipped
         [numbers out]
         (reduce
          (fn [[numbers out] {:keys [name colors]}]
@@ -218,13 +228,22 @@
                               :let [ps (palettes-of name)
                                     p (palette-for ps used)]]
                           [t p (drawing (:colors t) (ps p))])
-                 numbers (reduce (fn [numbers [_ _ d]] (if (contains? numbers d) numbers (assoc numbers d (count numbers))))
-                                 numbers placed)]
+                 [numbers looks]
+                 (reduce (fn [[numbers looks] [_ _ d]]
+                           (let [known (first (for [[flips variant] (flipped d)
+                                                    :when (contains? numbers variant)]
+                                                [(numbers variant) flips]))]
+                             (if known
+                               [numbers (conj looks known)]
+                               (let [n (count numbers)]
+                                 [(assoc numbers d n) (conj looks [n 0])]))))
+                         [numbers []]
+                         placed)]
              [numbers
               (conj out {:name name
                          :character (character name)
-                         :sprites (vec (for [[t p d] placed]
-                                         [(+ first-tile (numbers d)) (* 8 (:col t)) (* 8 (:row t)) p]))})]))
+                         :sprites (vec (for [[[t p _] [n flips]] (map vector placed looks)]
+                                         [(+ first-tile n) (* 8 (:col t)) (* 8 (:row t)) (bit-or p flips)]))})]))
          [{} []]
          frames)]
     (cond-> {:palettes palettes
