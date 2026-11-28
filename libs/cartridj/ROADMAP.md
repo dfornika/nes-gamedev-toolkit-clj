@@ -100,6 +100,8 @@ picture for every direction. Before reaching for a mapper:
   them) instead of code for each;
 - check what else is unrolled.
 
+(**Done**: `:sprite-tiles` in `program` gives sprites a pattern table of their own, 256 more tiles.)
+
 ## 5. Mappers
 
 Adopt one when PRG space (after step 4), or the need for different tiles in

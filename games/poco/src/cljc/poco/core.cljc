@@ -908,7 +908,7 @@
   (sub/sub
    :draw-cursor
    "A box round the selected slot, drawn as four corners, and blinking."
-   (let [tile (tileset/tile art/tiles :cursor)
+   (let [tile (tileset/tile art/sprite-tiles :cursor)
          p (:palette art/cursor-look)]
      [[:lda :rt/frame]
       [:and [:imm 16]]
@@ -1056,6 +1056,7 @@
    {:name "poco.nes"
     :variables variables
     :tiles (:tiles art/tiles)
+    :sprite-tiles (:tiles art/sprite-tiles)
     :palettes art/palettes
     :screens (assoc world/screens :items menu/screen-data)
     :tables {:world-palettes (vec (take 16 art/palettes))

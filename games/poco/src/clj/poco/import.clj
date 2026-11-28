@@ -22,7 +22,7 @@
 (def pictures
   "The folders of PNGs, one picture per frame: the characters share the
   sprite palettes, so they're imported together."
-  ["resources/assets/sprites/player" "resources/assets/sprites/enemies"])
+  ["resources/assets/sprites/player" "resources/assets/sprites/enemies" "resources/assets/sprites/effects"])
 (def output "resources/assets/sprites/sprites.edn")
 
 (defn import-sprites
